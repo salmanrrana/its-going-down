@@ -1,0 +1,17 @@
+{
+  "name": "its-going-down",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "It's Going Down — a downhill arcade game for kids of all ages.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10"
+  }
+}
