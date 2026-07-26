@@ -4,6 +4,7 @@ import { Input } from './core/input'
 import { Game, type HudState, type RunStats } from './game/game'
 import { getDifficulty, getLevel } from './game/levels'
 import { Renderer } from './game/renderer'
+import { resolveRunSelection } from './game/run-fixture'
 import type { DifficultyId, LevelId } from './game/types'
 import {
   Hud,
@@ -31,6 +32,7 @@ class App {
   private progress: Progress
   private level: LevelId
   private difficulty: DifficultyId
+  private readonly fixtureSeed: number | null
 
   private lastFrame = 0
   private rafId = 0
@@ -38,8 +40,13 @@ class App {
 
   constructor(root: HTMLElement) {
     this.progress = loadProgress()
-    this.level = this.progress.lastLevel
-    this.difficulty = this.progress.lastDifficulty
+    const selection = resolveRunSelection(window.location.search, {
+      level: this.progress.lastLevel,
+      difficulty: this.progress.lastDifficulty,
+    })
+    this.level = selection.level
+    this.difficulty = selection.difficulty
+    this.fixtureSeed = selection.seed
     audio.muted = this.progress.muted
 
     this.canvas = document.createElement('canvas')
@@ -152,8 +159,8 @@ class App {
 
     const level = getLevel(this.level)
     const difficulty = getDifficulty(this.difficulty)
-    // A fresh seed each run keeps the course from ever feeling memorised.
-    const seed = (Math.random() * 0xffffffff) >>> 0
+    // Normal runs stay fresh; browser automation can pin the course via query params.
+    const seed = this.fixtureSeed ?? (Math.random() * 0xffffffff) >>> 0
 
     this.game = new Game(
       level,

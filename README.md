@@ -63,9 +63,21 @@ npm run dev      # http://localhost:5173
 ```
 
 ```bash
+npm run typecheck
+npm test         # deterministic behavior suite
 npm run build    # typecheck + production build into dist/
 npm run preview  # serve the production build locally
 ```
+
+For browser automation and repeatable debugging, provide a complete run fixture in
+its query string, then press **Drop In**:
+
+```text
+http://localhost:5173/?level=snowboard&difficulty=easy&seed=1337
+```
+
+All three values are required. Level and difficulty must use the IDs defined in
+`src/game/levels.ts`; seeds are unsigned 32-bit integers.
 
 ## Deploying to Netlify
 

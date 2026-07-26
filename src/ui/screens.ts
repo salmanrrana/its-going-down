@@ -11,7 +11,23 @@ export interface Progress {
   muted: boolean
 }
 
-const STORAGE_KEY = 'its-going-down/progress/v1'
+export const PROGRESS_STORAGE_KEY = 'its-going-down/progress/v1'
+
+export function runKey(level: LevelId, difficulty: DifficultyId): string {
+  return `${level}:${difficulty}`
+}
+
+const VALID_RUN_KEYS = new Set(
+  LEVELS.flatMap((level) =>
+    DIFFICULTIES.map((difficulty) => runKey(level.id, difficulty.id)),
+  ),
+)
+
+const isLevelId = (value: unknown): value is LevelId =>
+  LEVELS.some((level) => level.id === value)
+
+const isDifficultyId = (value: unknown): value is DifficultyId =>
+  DIFFICULTIES.some((difficulty) => difficulty.id === value)
 
 export function loadProgress(): Progress {
   const fallback: Progress = {
@@ -22,27 +38,42 @@ export function loadProgress(): Progress {
     muted: false,
   }
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = localStorage.getItem(PROGRESS_STORAGE_KEY)
     if (!raw) return fallback
-    const parsed = JSON.parse(raw) as Partial<Progress>
-    // Coerce stored scores to finite numbers: they get interpolated into the
-    // DOM, and storage is user-writable.
+    const parsed: unknown = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return fallback
+
+    const stored = parsed as Partial<Progress>
+    // Storage is user-writable, so retain only real run keys and finite,
+    // non-negative scores that the game could have produced.
     const bestScores: Partial<Record<string, number>> = {}
-    for (const [key, value] of Object.entries(parsed.bestScores ?? {})) {
-      const n = Number(value)
-      if (Number.isFinite(n)) bestScores[key] = n
+    if (stored.bestScores && typeof stored.bestScores === 'object') {
+      for (const [key, value] of Object.entries(stored.bestScores)) {
+        if (
+          VALID_RUN_KEYS.has(key) &&
+          typeof value === 'number' &&
+          Number.isSafeInteger(value) &&
+          value >= 0
+        ) {
+          bestScores[key] = value
+        }
+      }
     }
+
+    const cleared = Array.isArray(stored.cleared)
+      ? [...new Set(stored.cleared.filter(
+        (key): key is string => typeof key === 'string' && VALID_RUN_KEYS.has(key),
+      ))]
+      : []
+
     return {
       bestScores,
-      cleared: (parsed.cleared ?? []).filter((c) => typeof c === 'string'),
-      // Only accept ids we actually ship; anything else falls back.
-      lastLevel: LEVELS.some((l) => l.id === parsed.lastLevel)
-        ? (parsed.lastLevel as LevelId)
-        : fallback.lastLevel,
-      lastDifficulty: DIFFICULTIES.some((d) => d.id === parsed.lastDifficulty)
-        ? (parsed.lastDifficulty as DifficultyId)
+      cleared,
+      lastLevel: isLevelId(stored.lastLevel) ? stored.lastLevel : fallback.lastLevel,
+      lastDifficulty: isDifficultyId(stored.lastDifficulty)
+        ? stored.lastDifficulty
         : fallback.lastDifficulty,
-      muted: parsed.muted === true,
+      muted: stored.muted === true,
     }
   } catch {
     // Private-mode or corrupted storage — play on with defaults.
@@ -52,14 +83,11 @@ export function loadProgress(): Progress {
 
 export function saveProgress(p: Progress): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(p))
+    localStorage.setItem(PROGRESS_STORAGE_KEY, JSON.stringify(p))
   } catch {
     // Storage unavailable; progress simply won't persist.
   }
 }
-
-export const runKey = (level: LevelId, difficulty: DifficultyId): string =>
-  `${level}:${difficulty}`
 
 const formatTime = (seconds: number): string => {
   const m = Math.floor(seconds / 60)

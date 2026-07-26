@@ -2,6 +2,7 @@ import { audio } from '../core/audio'
 import { Input } from '../core/input'
 import { clamp, damp } from '../core/math'
 import { PLAYER_HALF_WIDTH, Renderer, type RenderState } from './renderer'
+import { applySurfaceBounds, OBSTACLE_HALF_WIDTH } from './rules'
 import { generateTrack, SEGMENT_LENGTH, type Segment, type Track } from './track'
 import type { DifficultyDef, LevelDef } from './types'
 
@@ -43,8 +44,6 @@ export interface HudState {
   combo: number
 }
 
-/** Collision half-width for a hazard, in world units. */
-const OBSTACLE_HALF_WIDTH = 240
 const COIN_PICKUP_RADIUS = 380
 /** Clearance needed to fly over a hazard rather than hit it. */
 const JUMP_CLEARANCE = 330
@@ -217,23 +216,24 @@ export class Game {
     const relX = this.playerX
     const edge = seg.width
     const offSurface = Math.abs(relX) > edge
+    const easyMode = this.difficulty.id === 'easy'
 
-    if (offSurface) {
-      if (this.difficulty.id === 'easy') {
-        // Easy mode: a soft wall. You simply cannot leave the run.
-        this.playerX = clamp(relX, -edge, edge)
-        this.lateralV *= 0.3
-      } else {
-        // Drag and rumble when you stray onto the verge.
-        this.speed -= phys.offSurfaceDrag * 0.55 * dt
-        this.shake = Math.max(this.shake, 3.5 * speed01)
-        this.emitSpray(6, this.level.palette.spray, 0.5)
-        // A hard limit further out stops you leaving the world entirely.
-        const hardEdge = edge * 1.9
-        if (Math.abs(relX) > hardEdge) {
-          this.playerX = clamp(relX, -hardEdge, hardEdge)
-          this.lateralV *= -0.2
-        }
+    if (offSurface && easyMode) {
+      const bounds = applySurfaceBounds(relX, this.lateralV, edge, true)
+      this.playerX = bounds.playerX
+      this.lateralV = bounds.lateralV
+    }
+
+    if (offSurface && !easyMode) {
+      // Drag and rumble when you stray onto the verge.
+      this.speed -= phys.offSurfaceDrag * 0.55 * dt
+      this.shake = Math.max(this.shake, 3.5 * speed01)
+      this.emitSpray(6, this.level.palette.spray, 0.5)
+      // A hard limit further out stops you leaving the world entirely.
+      const hardEdge = edge * 1.9
+      if (Math.abs(relX) > hardEdge) {
+        this.playerX = clamp(relX, -hardEdge, hardEdge)
+        this.lateralV *= -0.2
       }
     }
 
