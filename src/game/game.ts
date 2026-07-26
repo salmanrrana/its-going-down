@@ -1,9 +1,11 @@
-import { clamp, damp } from '../core/math'
+import { clamp, damp, lerp, moveTowards } from '../core/math'
 import {
   COIN_PICKUP_RADIUS,
   JUMP_CLEARANCE,
   OBSTACLE_HALF_WIDTH,
   PLAYER_HALF_WIDTH,
+  RAMP_MAX_LAUNCH_SCALE,
+  RAMP_MIN_LAUNCH_SCALE,
 } from './constants'
 import type {
   GameEvent,
@@ -26,6 +28,7 @@ export interface GameOptions {
 }
 
 const NO_INPUT: InputFrame = { steer: 0, jump: false }
+const CRASH_RECOVERY_SECONDS = 0.9
 
 export class Game {
   private track: Track
@@ -37,6 +40,9 @@ export class Game {
   private lateralV = 0
   private position = 0
   private speed = 0
+  private steer = 0
+  private carve = 0
+  private landingImpact = 0
   private lean = 0
   private spin = 0
   private spinRate = 0
@@ -140,23 +146,32 @@ export class Game {
 
     const phys = this.level.physics
     const running = this.phase === 'running'
-    const throttle = this.crashRecovery > 0 ? 0.35 : 1
+    const unlosable = this.difficulty.lives === 0
+    const previousPosition = this.position
+    const previousPlayerX = this.playerX
+    const previousPlayerY = this.playerY
+    const speedSeg = this.segmentAt(previousPosition)
+    const nextSpeedSeg = this.segmentAt(previousPosition + SEGMENT_LENGTH)
+    const grade = clamp((nextSpeedSeg.y - speedSeg.y) / SEGMENT_LENGTH, -0.8, 0.8)
+    const hillScale = clamp(1 - grade * phys.hillSpeed, 0.92, 1.08)
+    const recovery01 = clamp(this.crashRecovery / CRASH_RECOVERY_SECONDS, 0, 1)
+    const wasOffSurface = Math.abs(this.playerX) > speedSeg.width
 
     if (running) {
-      const target = this.topSpeed * throttle
+      const throttle = lerp(1, 0.42, recovery01)
+      const surfaceScale = wasOffSurface && !unlosable ? 0.62 : 1
+      const hillTarget = this.topSpeed * throttle * hillScale * surfaceScale
+      const target = recovery01 > 0 ? Math.max(this.speed, hillTarget) : hillTarget
       const rate = this.speed < target ? phys.accel : phys.offSurfaceDrag
-      this.speed += Math.sign(target - this.speed) * rate * dt
-      if ((this.speed > target && rate === phys.accel) || this.speed > this.topSpeed) {
-        this.speed = Math.min(this.speed, target)
-      }
+      this.speed = moveTowards(this.speed, target, rate * dt)
     }
     this.crashRecovery = Math.max(0, this.crashRecovery - dt)
-    this.speed = clamp(this.speed, 0, this.topSpeed)
+    this.speed = clamp(this.speed, 0, this.topSpeed * 1.08)
     this.position += this.speed * dt
 
-    const speed01 = this.topSpeed > 0 ? this.speed / this.topSpeed : 0
     const seg = this.segmentAt(this.position)
-
+    const offSurface = Math.abs(this.playerX) > seg.width
+    const speed01 = this.topSpeed > 0 ? this.speed / this.topSpeed : 0
     const requestedSteer = Number.isFinite(input.steer) ? input.steer : 0
     let steer = running ? clamp(requestedSteer, -1, 1) : 0
     if (attract) {
@@ -166,40 +181,73 @@ export class Game {
 
     if (this.difficulty.assist > 0 && running) {
       const assist = this.lookaheadAssist()
-      steer = clamp(steer + assist * this.difficulty.assist, -1, 1)
+      if (assist !== 0) {
+        steer = unlosable
+          ? clamp(steer * 0.25 + assist * 0.9, -1, 1)
+          : clamp(steer + assist * this.difficulty.assist * (1 - Math.abs(steer) * 0.65), -1, 1)
+      }
     }
+    this.steer = steer
 
-    const authority = 0.35 + speed01 * 0.65
-    this.lateralV += steer * phys.steerRate * authority * 1000 * dt
-    this.lateralV -= seg.curve * speed01 * speed01 * phys.centrifugal * 90 * dt
-    this.lateralV *= Math.exp(-phys.grip * dt)
+    const airborne = this.playerY > 0.5
+    const speedAuthority = 0.5 + clamp(speed01, 0, 1) * 0.5
+    let surfaceAuthority = 1
+    let lateralGrip = phys.grip
+    if (airborne) {
+      surfaceAuthority = phys.airControl
+      lateralGrip = phys.grip * 0.55
+    } else if (offSurface) {
+      surfaceAuthority = phys.offSurfaceSteer
+      lateralGrip = phys.offSurfaceGrip
+    }
+    const steeringAccel = steer * phys.steerRate * speedAuthority * surfaceAuthority * 1000
+    const counterSteering =
+      steeringAccel !== 0 && this.lateralV !== 0 && Math.sign(steeringAccel) !== Math.sign(this.lateralV)
+    if (counterSteering) {
+      const brakingAccel = steeringAccel * phys.counterSteer
+      const timeToNeutral = Math.abs(this.lateralV / brakingAccel)
+      if (timeToNeutral < dt) {
+        this.lateralV = steeringAccel * (dt - timeToNeutral)
+      } else {
+        this.lateralV += brakingAccel * dt
+      }
+    } else {
+      this.lateralV += steeringAccel * dt
+    }
+    this.lateralV -=
+      seg.curve * speed01 * speed01 * phys.centrifugal * (airborne ? 24 : 90) * (recovery01 > 0 ? 0 : 1) * dt
+    this.lateralV = damp(this.lateralV, 0, lateralGrip, dt)
     this.playerX += this.lateralV * dt
 
     // playerX is the offset from the road centre, so the shared helper can
     // enforce Easy's soft wall and the outer boundary for other difficulties.
-    const unlosable = this.difficulty.lives === 0
     const bounds = applySurfaceBounds(this.playerX, this.lateralV, seg.width, unlosable)
     this.playerX = bounds.playerX
     this.lateralV = bounds.lateralV
     const relX = this.playerX
 
     if (bounds.offSurface && !unlosable) {
-      this.speed -= phys.offSurfaceDrag * 0.55 * dt
+      this.speed = moveTowards(this.speed, 0, phys.offSurfaceDrag * 0.55 * dt)
       this.shake = Math.max(this.shake, 3.5 * speed01)
       this.emitSpray(6, this.level.palette.spray, 0.5)
     }
-
-    const airborne = this.playerY > 0.5
-    if (running && this.difficulty.jumpEnabled && input.jump && !airborne) {
+    if (running && !attract && this.difficulty.jumpEnabled && input.jump && !airborne) {
       this.playerVY = phys.jumpImpulse
       this.spinRate = this.lateralV * 0.00035
       this.emitSound('jump')
     }
 
+    // Bundled top speeds cannot traverse a whole segment in one fixed tick, so
+    // the endpoint segment is always the only newly entered ramp segment.
     if (seg.ramp && !airborne && running) {
       const dxr = Math.abs(relX - seg.ramp.x)
       if (dxr < seg.ramp.width) {
-        this.playerVY = phys.jumpImpulse * seg.ramp.power * (0.9 + speed01 * 0.5)
+        const launchScale = clamp(
+          seg.ramp.power * (0.9 + speed01 * 0.5),
+          RAMP_MIN_LAUNCH_SCALE,
+          RAMP_MAX_LAUNCH_SCALE,
+        )
+        this.playerVY = phys.jumpImpulse * launchScale
         this.spinRate = this.lateralV * 0.0003
         this.emitSound('ramp')
         this.addScore(75)
@@ -210,9 +258,11 @@ export class Game {
       this.playerVY -= phys.gravity * dt
       this.playerY += this.playerVY * dt
       this.airTime += dt
-      if (this.playerY <= 0) {
+      if (this.playerY <= 0.5 && this.playerVY < 0) {
+        const landingVelocity = Math.abs(this.playerVY)
         this.playerY = 0
         this.playerVY = 0
+        this.landingImpact = clamp(landingVelocity / (phys.jumpImpulse * 1.25), 0, 1)
         this.spin = 0
         this.spinRate = 0
         if (this.airTime > 0.25) {
@@ -232,8 +282,13 @@ export class Game {
     this.spin += this.spinRate * dt * 60 * 0.02
     if (this.playerY <= 0) this.spin = damp(this.spin, 0, 12, dt)
 
-    const leanTarget = clamp(this.lateralV / 2600, -1, 1) * phys.lean
-    this.lean = damp(this.lean, leanTarget, 9, dt)
+    const carveTarget = !airborne && !bounds.offSurface
+      ? clamp(steer * 0.72 + (this.lateralV / 3200) * 0.28, -1, 1) * clamp(speed01, 0, 1)
+      : 0
+    this.carve = damp(this.carve, carveTarget, airborne ? 5 : 13, dt)
+    const leanTarget = clamp(this.carve + this.lateralV / 7000, -1, 1) * phys.lean
+    this.lean = damp(this.lean, leanTarget, 11, dt)
+    this.landingImpact = Math.max(0, this.landingImpact - dt * 3.5)
     this.hurt = Math.max(0, this.hurt - dt * 2.2)
     this.shake = Math.max(0, this.shake - dt * 22)
     this.invulnerable = Math.max(0, this.invulnerable - dt)
@@ -242,14 +297,18 @@ export class Game {
       if (this.comboTimer <= 0) this.combo = 0
     }
 
-    if (running && this.playerY <= 0 && speed01 > 0.3) {
-      if (Math.abs(this.lateralV) > 900 && Math.random() < 0.6) {
-        this.emitSpray(2, this.level.palette.spray, 0.6)
-      }
+    if (
+      running &&
+      this.playerY <= 0 &&
+      speed01 > 0.3 &&
+      Math.abs(this.lateralV) > 900 &&
+      Math.floor(this.time * 18) !== Math.floor((this.time - dt) * 18)
+    ) {
+      this.emitSpray(2, this.level.palette.spray, 0.6)
     }
 
     if (running && !attract) {
-      this.resolveCollisions(relX)
+      this.resolveCollisions(previousPosition, previousPlayerX, previousPlayerY)
       if (!this.isActive()) {
         this.pushHud()
         this.events.push({ type: 'run-ended', stats: this.stats })
@@ -318,16 +377,25 @@ export class Game {
     return 0
   }
 
-  private resolveCollisions(relX: number): void {
-    const startSeg = Math.floor(this.position / SEGMENT_LENGTH)
+  private resolveCollisions(
+    previousPosition: number,
+    previousPlayerX: number,
+    previousPlayerY: number,
+  ): void {
+    const distance = this.position - previousPosition
+    if (distance <= 0) return
+    const startSeg = Math.floor(previousPosition / SEGMENT_LENGTH) + 1
+    const endSeg = Math.floor(this.position / SEGMENT_LENGTH)
     const segs = this.track.segments
-    const span = Math.max(2, Math.ceil((this.speed * (1 / 30)) / SEGMENT_LENGTH) + 1)
-    for (let i = startSeg; i < Math.min(startSeg + span, segs.length); i++) {
+    for (let i = startSeg; i <= Math.min(endSeg, segs.length - 1); i++) {
       const seg = segs[i]
+      const contactT = clamp((seg.z - previousPosition) / distance, 0, 1)
+      const contactX = lerp(previousPlayerX, this.playerX, contactT)
+      const contactY = lerp(previousPlayerY, this.playerY, contactT)
 
       for (const coin of seg.coins) {
         if (coin.spent) continue
-        if (Math.abs(coin.x - relX) < COIN_PICKUP_RADIUS && this.playerY < 700) {
+        if (Math.abs(coin.x - contactX) < COIN_PICKUP_RADIUS && contactY < 700) {
           coin.spent = true
           this.coins++
           this.addScore(50 * (1 + this.combo * 0.15))
@@ -340,8 +408,8 @@ export class Game {
       for (const ob of seg.obstacles) {
         if (ob.spent) continue
         const halfW = OBSTACLE_HALF_WIDTH * ob.scale
-        if (Math.abs(ob.x - relX) > halfW + PLAYER_HALF_WIDTH) continue
-        if (this.playerY > JUMP_CLEARANCE) {
+        if (Math.abs(ob.x - contactX) > halfW + PLAYER_HALF_WIDTH) continue
+        if (contactY > JUMP_CLEARANCE) {
           ob.spent = true
           this.addScore(120)
           this.bumpCombo()
@@ -361,9 +429,11 @@ export class Game {
     this.hurt = 1
     this.shake = 14
     this.invulnerable = 1.4
-    this.crashRecovery = 0.9
-    this.speed *= 0.35
-    this.lateralV *= -0.35
+    this.crashRecovery = CRASH_RECOVERY_SECONDS
+    this.speed *= 0.42
+    this.lateralV *= 0.12
+    this.carve = 0
+    this.landingImpact = 0
     this.playerVY = 0
     this.playerY = 0
     this.emitSound('crash')
@@ -458,6 +528,11 @@ export class Game {
       position: this.position,
       speed: this.speed,
       speed01: this.topSpeed > 0 ? this.speed / this.topSpeed : 0,
+      lateralVelocity: this.lateralV,
+      verticalVelocity: this.playerVY,
+      steer: this.steer,
+      carve: this.carve,
+      landingImpact: this.landingImpact,
       lean: this.lean,
       spin: this.spin,
       time: this.time,

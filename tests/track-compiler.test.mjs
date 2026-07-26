@@ -485,7 +485,12 @@ describe('generation fairness remains intact', () => {
             )
           }
           if (segment.ramp) {
-            for (let landing = index; landing < Math.min(index + 26, track.segments.length); landing++) {
+            const landingSegments = trackModule.rampLandingClearanceSegments(level, difficulty)
+            for (
+              let landing = index;
+              landing < Math.min(index + landingSegments, track.segments.length);
+              landing++
+            ) {
               assert.equal(
                 track.segments[landing].obstacles.length,
                 0,

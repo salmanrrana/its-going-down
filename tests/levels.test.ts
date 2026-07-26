@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { FIXED_STEP_SECONDS } from '../src/core/fixed-step'
 import {
   DIFFICULTIES,
   getDifficulty,
@@ -7,7 +8,9 @@ import {
   isLevelId,
   LEVELS,
 } from '../src/game/levels'
+import { JUMP_CLEARANCE } from '../src/game/constants'
 import { applySurfaceBounds } from '../src/game/rules'
+import { SEGMENT_LENGTH } from '../src/game/track'
 import type { DifficultyId, LevelId } from '../src/game/types'
 
 const LEVEL_IDS = [
@@ -37,6 +40,31 @@ describe('level and difficulty definitions', () => {
       [...DIFFICULTIES]
         .map((difficulty) => difficulty.obstacleScale)
         .sort((a, b) => a - b),
+    )
+  })
+
+  it('gives all seven sports complete, viable Arcade Fidelity physics', () => {
+    for (const level of LEVELS) {
+      const physics = level.physics
+      expect(physics.steerRate, level.id).toBeGreaterThan(10)
+      expect(physics.counterSteer, level.id).toBeGreaterThan(1)
+      expect(physics.airControl, level.id).toBeGreaterThan(0.2)
+      expect(physics.airControl, level.id).toBeLessThan(0.6)
+      expect(physics.offSurfaceSteer, level.id).toBeGreaterThan(physics.airControl)
+      expect(physics.offSurfaceGrip, level.id).toBeGreaterThan(physics.grip)
+      expect(physics.hillSpeed, level.id).toBeGreaterThan(0)
+      expect(physics.hillSpeed, level.id).toBeLessThanOrEqual(0.15)
+      expect(physics.topSpeed * 1.08 * FIXED_STEP_SECONDS, level.id).toBeLessThan(
+        SEGMENT_LENGTH,
+      )
+      expect(
+        (physics.jumpImpulse * physics.jumpImpulse) / (2 * physics.gravity),
+        level.id,
+      ).toBeGreaterThan(JUMP_CLEARANCE)
+    }
+    expect(getLevel('snowboard').physics.lean).toBeGreaterThan(getLevel('gokart').physics.lean)
+    expect(getLevel('snowboard').physics.steerRate / getLevel('snowboard').physics.grip).toBeGreaterThan(
+      getLevel('gokart').physics.steerRate / getLevel('gokart').physics.grip,
     )
   })
 

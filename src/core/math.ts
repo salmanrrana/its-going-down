@@ -3,6 +3,9 @@ export const clamp = (v: number, lo: number, hi: number): number =>
 
 export const lerp = (a: number, b: number, t: number): number => a + (b - a) * t
 
+export const moveTowards = (value: number, target: number, maxDelta: number): number =>
+  value < target ? Math.min(value + maxDelta, target) : Math.max(value - maxDelta, target)
+
 /** Frame-rate independent exponential smoothing. `rate` is roughly "per second". */
 export const damp = (a: number, b: number, rate: number, dt: number): number =>
   lerp(a, b, 1 - Math.exp(-rate * dt))

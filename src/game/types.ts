@@ -44,10 +44,20 @@ export interface Physics {
   accel: number
   /** Deceleration after a crash or off-surface. */
   offSurfaceDrag: number
-  /** Lateral responsiveness — how quickly steering input becomes movement. */
+  /** Grounded lateral acceleration, in thousands of world units/sec². */
   steerRate: number
-  /** How strongly lateral velocity bleeds off (grip vs. slide). */
+  /** How strongly grounded lateral velocity bleeds off (grip vs. slide). */
   grip: number
+  /** Acceleration multiplier while actively steering against lateral motion. */
+  counterSteer: number
+  /** Steering authority retained while airborne. */
+  airControl: number
+  /** Steering authority retained beyond the prepared surface. */
+  offSurfaceSteer: number
+  /** Lateral damping beyond the prepared surface. */
+  offSurfaceGrip: number
+  /** How strongly local uphill/downhill grade changes target speed. */
+  hillSpeed: number
   /** Extra sideways pull when the run curves — the "carve" feel. */
   centrifugal: number
   /** Upward impulse on jump. */

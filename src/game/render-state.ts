@@ -8,6 +8,11 @@ export type RenderState = Pick<
   | 'position'
   | 'speed'
   | 'speed01'
+  | 'lateralVelocity'
+  | 'verticalVelocity'
+  | 'steer'
+  | 'carve'
+  | 'landingImpact'
   | 'lean'
   | 'spin'
   | 'time'
@@ -28,6 +33,11 @@ export function interpolateRenderState(
     position: lerp(previous.position, current.position, t),
     speed: lerp(previous.speed, current.speed, t),
     speed01: lerp(previous.speed01, current.speed01, t),
+    lateralVelocity: lerp(previous.lateralVelocity, current.lateralVelocity, t),
+    verticalVelocity: lerp(previous.verticalVelocity, current.verticalVelocity, t),
+    steer: lerp(previous.steer, current.steer, t),
+    carve: lerp(previous.carve, current.carve, t),
+    landingImpact: lerp(previous.landingImpact, current.landingImpact, t),
     lean: lerp(previous.lean, current.lean, t),
     spin: lerp(previous.spin, current.spin, t),
     time: lerp(previous.time, current.time, t),

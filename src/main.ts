@@ -332,7 +332,7 @@ class App {
     }
 
     const result = this.clock.advance(elapsed, (dt) => {
-      this.dispatchGameEvents(game.update(dt, this.tickInput.consume()))
+      this.dispatchGameEvents(game.update(dt, this.tickInput.consume(dt)))
       this.renderer.update(dt)
     })
     this.renderer.render(game.previousSnapshot, game.currentSnapshot, result.alpha)

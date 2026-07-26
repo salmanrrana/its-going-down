@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { PLAYER_HALF_WIDTH } from '../src/game/renderer'
 import { OBSTACLE_HALF_WIDTH } from '../src/game/rules'
-import { generateTrack, type Segment } from '../src/game/track'
+import {
+  generateTrack,
+  rampLandingClearanceSegments,
+  type Segment,
+} from '../src/game/track'
 import { RUN_FIXTURES } from './fixtures/runs'
 
 function widestObstacleGap(segment: Segment): number {
@@ -66,7 +70,10 @@ describe('seeded track generation', () => {
       for (const segment of track.segments) {
         if (!segment.ramp) continue
 
-        const landing = track.segments.slice(segment.index, segment.index + 26)
+        const landing = track.segments.slice(
+          segment.index,
+          segment.index + rampLandingClearanceSegments(level, difficulty),
+        )
         expect(
           landing.every((candidate) => candidate.obstacles.length === 0),
           `${level.id}/${difficulty.id}/${seed} ramp at segment ${segment.index}`,

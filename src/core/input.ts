@@ -1,4 +1,6 @@
+import { clamp } from './math'
 import type { InputFrame } from '../game/contracts'
+import type { SteeringSource } from './steering'
 
 interface Pointer {
   id: number
@@ -6,7 +8,6 @@ interface Pointer {
   startY: number
   x: number
   y: number
-  startTime: number
   jumped: boolean
 }
 
@@ -15,10 +16,24 @@ export interface DomInputFrame {
   pause: boolean
 }
 
+/** Continuous touch intent combining screen-centred steering with relative drag. */
+export function touchSteerFromPosition(
+  x: number,
+  startX: number,
+  viewportWidth: number,
+): number {
+  const width = Math.max(1, viewportWidth)
+  const half = width * 0.5
+  const centred = (x - half) / (half * 0.82)
+  const drag = (x - startX) / (width * 0.32)
+  return clamp(centred * 0.72 + drag * 0.28, -1, 1)
+}
+
 /** Owns DOM input and exposes one renderer-neutral sample per animation frame. */
 export class Input {
   private keys = new Set<string>()
   private pointers = new Map<number, Pointer>()
+  private steeringPointerId: number | null = null
   private jumpQueued = false
   private pauseQueued = false
   private width = 1
@@ -47,36 +62,44 @@ export class Input {
   private onPointerDown = (e: PointerEvent): void => {
     if (e.pointerType === 'mouse' && e.button !== 0) return
     if (e.pointerType !== 'mouse') this.touchSeen = true
-    const p: Pointer = {
+    const isSteeringPointer = this.steeringPointerId === null
+    const pointer: Pointer = {
       id: e.pointerId,
       startX: e.clientX,
       startY: e.clientY,
       x: e.clientX,
       y: e.clientY,
-      startTime: performance.now(),
-      jumped: false,
+      jumped: !isSteeringPointer,
     }
-    if (this.pointers.size > 0) {
-      this.jumpQueued = true
-      p.jumped = true
-    }
-    this.pointers.set(e.pointerId, p)
+    if (isSteeringPointer) this.steeringPointerId = e.pointerId
+    else this.jumpQueued = true
+    this.pointers.set(e.pointerId, pointer)
     this.target?.setPointerCapture(e.pointerId)
   }
 
   private onPointerMove = (e: PointerEvent): void => {
-    const p = this.pointers.get(e.pointerId)
-    if (!p) return
-    p.x = e.clientX
-    p.y = e.clientY
-    if (!p.jumped && p.startY - p.y > this.height * 0.08) {
+    const pointer = this.pointers.get(e.pointerId)
+    if (!pointer) return
+    pointer.x = e.clientX
+    pointer.y = e.clientY
+    if (!pointer.jumped && pointer.startY - pointer.y > this.height * 0.08) {
       this.jumpQueued = true
-      p.jumped = true
+      pointer.jumped = true
     }
   }
 
   private onPointerUp = (e: PointerEvent): void => {
     this.pointers.delete(e.pointerId)
+    if (this.steeringPointerId === e.pointerId) {
+      const promoted = this.pointers.values().next().value as Pointer | undefined
+      if (promoted) {
+        promoted.startX = promoted.x
+        promoted.startY = promoted.y
+        this.steeringPointerId = promoted.id
+      } else {
+        this.steeringPointerId = null
+      }
+    }
     if (this.target?.hasPointerCapture(e.pointerId)) {
       this.target.releasePointerCapture(e.pointerId)
     }
@@ -123,28 +146,24 @@ export class Input {
 
   /** Sample held and edge-triggered controls exactly once per animation frame. */
   sample(): DomInputFrame {
-    let steer = 0
-    if (this.keys.has('arrowleft') || this.keys.has('a')) steer -= 1
-    if (this.keys.has('arrowright') || this.keys.has('d')) steer += 1
+    let rawSteer = 0
+    let source: SteeringSource = 'release'
+    if (this.keys.has('arrowleft') || this.keys.has('a')) rawSteer -= 1
+    if (this.keys.has('arrowright') || this.keys.has('d')) rawSteer += 1
+    if (rawSteer !== 0) source = 'keyboard'
 
-    if (steer === 0 && this.pointers.size > 0) {
-      let thumb: Pointer | null = null
-      for (const p of this.pointers.values()) {
-        if (!thumb || p.startTime < thumb.startTime) thumb = p
-      }
-      if (thumb) {
-        const half = this.width * 0.5
-        const side = thumb.x < half ? -1 : 1
-        const drag = (thumb.x - thumb.startX) / (this.width * 0.22)
-        const held = (thumb.x - half) / (half * 0.75)
-        steer = Math.abs(drag) > 0.25 ? drag : held
-        if (Math.abs(steer) < 0.15) steer = side * 0.15
+    if (rawSteer === 0 && this.steeringPointerId !== null) {
+      const pointer = this.pointers.get(this.steeringPointerId)
+      if (pointer) {
+        rawSteer = touchSteerFromPosition(pointer.x, pointer.startX, this.width)
+        source = 'touch'
       }
     }
 
     const frame: DomInputFrame = {
       input: {
-        steer: Math.max(-1, Math.min(1, steer)),
+        steer: rawSteer,
+        steerSource: source,
         jump: this.jumpQueued,
       },
       pause: this.pauseQueued,
@@ -157,6 +176,7 @@ export class Input {
   clear(): void {
     this.jumpQueued = false
     this.pauseQueued = false
+    this.steeringPointerId = null
     this.keys.clear()
     this.pointers.clear()
   }

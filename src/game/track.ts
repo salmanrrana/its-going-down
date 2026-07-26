@@ -1,4 +1,5 @@
 import { makeRng } from '../core/math'
+import { RAMP_MAX_LAUNCH_SCALE } from './constants'
 import type { DifficultyDef, LevelDef, ObstacleKind, SceneryKind } from './types'
 
 export const SEGMENT_LENGTH = 200
@@ -38,6 +39,16 @@ export interface Segment {
 export interface Track {
   segments: Segment[]
   totalLength: number
+}
+
+export function rampLandingClearanceSegments(
+  level: LevelDef,
+  difficulty: DifficultyDef,
+): number {
+  const maxSpeed = level.physics.topSpeed * difficulty.speedScale * 1.08
+  const maxFlightSeconds =
+    (2 * level.physics.jumpImpulse * RAMP_MAX_LAUNCH_SCALE) / level.physics.gravity
+  return Math.ceil((maxSpeed * maxFlightSeconds) / SEGMENT_LENGTH) + 6
 }
 
 /**
@@ -86,6 +97,7 @@ export function generateTrack(
   const segments: Segment[] = []
 
   const count = level.length
+  const rampLandingSegments = rampLandingClearanceSegments(level, difficulty)
   // Leading run-up with no hazards so the player can find their feet.
   const introSegments = 90
   // Clear final stretch so the finish never feels cheap.
@@ -138,7 +150,7 @@ export function generateTrack(
       power: 0.85 + rng() * 0.5,
     }
     // Keep the landing zone clear so a good jump is always rewarded.
-    for (let j = i; j < Math.min(count, i + 26); j++) {
+    for (let j = i; j < Math.min(count, i + rampLandingSegments); j++) {
       segments[j].obstacles.length = 0
     }
   }
@@ -156,7 +168,7 @@ export function generateTrack(
     if (seg.ramp) continue
     // Don't drop obstacles into a ramp's landing zone.
     let nearRamp = false
-    for (let j = Math.max(0, i - 30); j < Math.min(count, i + 4); j++) {
+    for (let j = Math.max(0, i - rampLandingSegments); j < Math.min(count, i + 4); j++) {
       if (segments[j].ramp) {
         nearRamp = true
         break

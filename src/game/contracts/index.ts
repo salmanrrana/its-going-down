@@ -1,3 +1,4 @@
+import type { SteeringSource } from '../../core/steering'
 import type { Track } from '../track'
 import type { LevelDef } from '../types'
 
@@ -6,6 +7,8 @@ export type GamePhase = 'countdown' | 'running' | 'paused' | 'finished' | 'faile
 export interface InputFrame {
   /** Normalized steering request. Game clamps external producers to -1..1. */
   readonly steer: number
+  /** Optional producer response profile, applied by the fixed-tick input buffer. */
+  readonly steerSource?: SteeringSource
   /** Edge-triggered request consumed by at most one simulation tick. */
   readonly jump: boolean
 }
@@ -47,6 +50,16 @@ export interface GameSnapshot {
   readonly position: number
   readonly speed: number
   readonly speed01: number
+  /** Signed lateral velocity in world units/sec. */
+  readonly lateralVelocity: number
+  /** Signed vertical velocity in world units/sec. */
+  readonly verticalVelocity: number
+  /** Final assisted steering request used by the simulation. */
+  readonly steer: number
+  /** Signed grounded carve intensity, normalized to -1..1. */
+  readonly carve: number
+  /** Recent landing impulse, normalized to 0..1 and decaying to zero. */
+  readonly landingImpact: number
   readonly lean: number
   readonly spin: number
   readonly time: number
