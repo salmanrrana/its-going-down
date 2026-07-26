@@ -18,5 +18,6 @@ plans/ralph*.sh
 .claude/ralph-state.json
 .claude/capture-token-usage.log
 .claude/review-runs/
+.claude/worktrees/
 .ralph-prompt.md
 .ralph-services.json
