@@ -14,6 +14,7 @@ interface Particle {
   readonly position: Vector3
   readonly velocity: Vector3
   readonly color: Color
+  readonly gravity: Vector3
   life: number
 }
 
@@ -21,6 +22,7 @@ export class SurfaceParticlePool {
   readonly points: Points
   private readonly tracker = new ResourceTracker()
   private readonly particles: Particle[] = []
+  private readonly recycled: Particle[] = []
   private readonly positions: Float32Array
   private readonly colors: Float32Array
   private cursor = 0
@@ -35,7 +37,7 @@ export class SurfaceParticlePool {
     geometry.setDrawRange(0, 0)
     const material = this.tracker.trackMaterial(
       new PointsMaterial({
-        size: 0.11,
+        size: 0.15,
         sizeAttenuation: true,
         transparent: true,
         opacity: 0.9,
@@ -52,36 +54,53 @@ export class SurfaceParticlePool {
     return this.randomState / 0x100000000
   }
 
-  emit(effect: SprayEffect, origin: Vector3, frame: TrackFrame): void {
-    const color = new Color(effect.color)
+  emit(
+    effect: SprayEffect,
+    origin: Vector3,
+    frame: TrackFrame,
+    countScale = 1,
+    forceScale = 1,
+  ): void {
+    const effectColor = new Color(effect.color)
     const right = new Vector3(frame.right.x, frame.right.y, frame.right.z)
     const normal = new Vector3(frame.normal.x, frame.normal.y, frame.normal.z)
     const tangent = new Vector3(frame.tangent.x, frame.tangent.y, frame.tangent.z)
-    for (let i = 0; i < effect.count; i++) {
+    const count = Math.min(this.capacity, Math.max(effect.count, Math.round(effect.count * countScale)))
+
+    for (let i = 0; i < count; i++) {
       const angle = effect.burst
         ? this.random() * Math.PI * 2
         : Math.PI * (0.15 + this.random() * 0.7)
-      const speed = (effect.burst ? 3.8 : 2.2) * effect.force * (0.55 + this.random() * 0.75)
-      const life = 0.35 + this.random() * 0.55
-      const position = origin.clone()
+      const speed = (effect.burst ? 3.8 : 2.2)
+        * effect.force
+        * forceScale
+        * (0.55 + this.random() * 0.75)
+      let particle: Particle
+      if (this.particles.length < this.capacity) {
+        particle = this.recycled.pop() ?? {
+          position: new Vector3(),
+          velocity: new Vector3(),
+          color: new Color(),
+          gravity: new Vector3(),
+          life: 0,
+        }
+        this.particles.push(particle)
+      } else {
+        particle = this.particles[this.cursor]
+        this.cursor = (this.cursor + 1) % this.capacity
+      }
+
+      particle.life = 0.35 + this.random() * 0.55
+      particle.color.copy(effectColor)
+      particle.gravity.copy(normal).multiplyScalar(-5.8)
+      particle.position.copy(origin)
         .addScaledVector(right, (this.random() - 0.5) * 0.5)
         .addScaledVector(normal, 0.08 + this.random() * 0.08)
         .addScaledVector(tangent, -0.18)
-      const velocity = right.clone()
+      particle.velocity.copy(right)
         .multiplyScalar(Math.cos(angle) * speed - effect.lateralVelocity * 0.00025)
         .addScaledVector(normal, 0.9 + this.random() * (effect.burst ? 2.8 : 1.2))
         .addScaledVector(tangent, -(0.8 + Math.sin(angle) * speed))
-      const particle: Particle = {
-        position,
-        velocity,
-        color,
-        life,
-      }
-      if (this.particles.length < this.capacity) this.particles.push(particle)
-      else {
-        this.particles[this.cursor] = particle
-        this.cursor = (this.cursor + 1) % this.capacity
-      }
     }
     this.upload()
   }
@@ -90,9 +109,12 @@ export class SurfaceParticlePool {
     let write = 0
     for (const particle of this.particles) {
       particle.life -= dt
-      if (particle.life <= 0) continue
+      if (particle.life <= 0) {
+        this.recycled.push(particle)
+        continue
+      }
       particle.position.addScaledVector(particle.velocity, dt)
-      particle.velocity.y -= 5.8 * dt
+      particle.velocity.addScaledVector(particle.gravity, dt)
       particle.velocity.multiplyScalar(Math.max(0, 1 - dt * 1.4))
       this.particles[write++] = particle
     }
@@ -102,6 +124,7 @@ export class SurfaceParticlePool {
   }
 
   clear(): void {
+    this.recycled.push(...this.particles)
     this.particles.length = 0
     this.cursor = 0
     this.upload()

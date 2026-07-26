@@ -22,7 +22,6 @@ import { ChaseCameraRig } from './camera-rig'
 import { addLighting } from './lighting'
 import { RenderMetricsCollector, type ThreeRenderMetrics } from './metrics'
 import { PlayerProxy } from './player-proxy'
-import { ProceduralWorld } from './procedural-world'
 import {
   QUALITY_PROFILES,
   detectQualitySignals,
@@ -31,6 +30,7 @@ import {
 } from './quality'
 import { createRenderer, resizeRenderer } from './renderer-config'
 import { SurfaceParticlePool } from './surface-particles'
+import { createWorldBuilder, type WorldBuilder } from './world-builder'
 
 const THREE_SIMULATION_UNITS_PER_RENDER_UNIT = 1000
 
@@ -57,7 +57,7 @@ export class ThreeGameView implements GameView {
   })
   private readonly damageFlash = new Mesh(new PlaneGeometry(2, 2), this.damageMaterial)
   private renderer: WebGLRenderer | null = null
-  private world: ProceduralWorld | null = null
+  private world: WorldBuilder | null = null
   private player: PlayerProxy | null = null
   private activeTrack: Track | null = null
   private lastTrackSample: SampledTrackPoint | null = null
@@ -95,8 +95,6 @@ export class ThreeGameView implements GameView {
     try {
       this.renderer = createRenderer(canvas, this.quality)
       addLighting(this.scene, this.quality)
-      this.cameraRig.camera.far = this.quality.drawDistance * 0.2 + 12
-      this.cameraRig.camera.updateProjectionMatrix()
       window.__THREE_GAME_METRICS__ = () => this.metrics
       this.resize()
       this.options.onAvailabilityChange?.(true)
@@ -197,7 +195,7 @@ export class ThreeGameView implements GameView {
       trackId: `three:${snapshot.level.id}`,
       simulationUnitsPerRenderUnit: THREE_SIMULATION_UNITS_PER_RENDER_UNIT,
     })
-    this.world = new ProceduralWorld(
+    this.world = createWorldBuilder(
       snapshot.track,
       compiled,
       snapshot.level,
@@ -208,8 +206,12 @@ export class ThreeGameView implements GameView {
     this.scene.add(this.world.root, this.player.root)
     this.activeTrack = snapshot.track
 
-    const fogNear = this.quality.drawDistance * 0.2 * 0.48
-    const fogFar = this.quality.drawDistance * 0.2
+    const { visualProfile } = this.world
+    const fogNear = this.quality.drawDistance * visualProfile.fogNearScale
+    const fogFar = this.quality.drawDistance * visualProfile.fogFarScale
+    this.cameraRig.camera.far = this.quality.drawDistance * visualProfile.cameraFarScale
+      + visualProfile.cameraFarPadding
+    this.cameraRig.camera.updateProjectionMatrix()
     this.scene.background = new Color(snapshot.level.palette.skyBottom)
     this.scene.fog = new Fog(snapshot.level.palette.fog, fogNear, fogFar)
   }
@@ -235,6 +237,7 @@ export class ThreeGameView implements GameView {
       state.spin,
       state.time,
       state.speed01,
+      state.airborne,
     )
     this.damageMaterial.opacity = clamp(state.hurt * 0.32, 0, 0.32)
     this.damageFlash.visible = this.damageMaterial.opacity > 0.001
@@ -279,7 +282,13 @@ export class ThreeGameView implements GameView {
       surfacePosition.y + sample.frame.normal.y * height,
       surfacePosition.z + sample.frame.normal.z * height,
     )
-    this.particles.emit(effect, origin, sample.frame)
+    this.particles.emit(
+      effect,
+      origin,
+      sample.frame,
+      this.world.visualProfile.sprayCountScale,
+      this.world.visualProfile.sprayForceScale,
+    )
   }
 
   private updateMetricsOverlay(metrics: ThreeRenderMetrics): void {

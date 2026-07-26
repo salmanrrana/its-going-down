@@ -29,6 +29,7 @@ import type { Prop, Track } from '../../game/track'
 import type { LevelDef, ObstacleKind, SceneryKind } from '../../game/types'
 import type { QualityProfile } from './quality'
 import { ResourceTracker } from './resources'
+import type { WorldVisualProfile } from './world-builder'
 
 type WorldKind = ObstacleKind | SceneryKind | 'coin'
 type VisibleEntity = Exclude<CompiledEntity, { category: 'ramp' }>
@@ -255,6 +256,14 @@ function mapSourceProps(track: Track, compiled: CompiledTrack3D): ReadonlyMap<st
 
 export class ProceduralWorld {
   readonly root = new Group()
+  readonly visualProfile: WorldVisualProfile = {
+    fogNearScale: 0.096,
+    fogFarScale: 0.2,
+    cameraFarScale: 0.2,
+    cameraFarPadding: 12,
+    sprayCountScale: 1,
+    sprayForceScale: 1,
+  }
   private readonly tracker = new ResourceTracker()
   private readonly batches: InstanceBatch[] = []
   private readonly sourcePropsByEntityId: ReadonlyMap<string, Prop>
