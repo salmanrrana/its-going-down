@@ -41,6 +41,17 @@ export interface CompiledTrackSample {
   readonly dark: boolean
 }
 
+/** Interpolated course state at an arbitrary longitudinal simulation position. */
+export interface SampledTrackPoint {
+  readonly sourcePosition: number
+  readonly sourceSegmentIndex: number
+  readonly position: Vec3
+  readonly frame: TrackFrame
+  readonly halfWidth: number
+  readonly elevation: number
+  readonly cumulativeDistance: number
+}
+
 export type CompiledEntityCategory = 'obstacle' | 'scenery' | 'coin' | 'ramp'
 
 export interface CompiledTransform {

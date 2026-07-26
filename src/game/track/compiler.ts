@@ -1,3 +1,4 @@
+import { lerp } from '../../core/math'
 import type { DifficultyDef, LevelDef, ObstacleKind, SceneryKind } from '../types'
 import { generateTrack, SEGMENT_LENGTH, type Track } from '../track'
 import type {
@@ -13,6 +14,7 @@ import type {
   CompiledTrackSample,
   CompiledTransform,
   GeneratedTrackCompilationOptions,
+  SampledTrackPoint,
   TrackCompilationOptions,
   TrackFrame,
   Vec3,
@@ -239,8 +241,64 @@ function compileSamples(
   return freezeArray(samples)
 }
 
+function interpolateVector(start: Vec3, end: Vec3, amount: number): Vec3 {
+  return vector(
+    lerp(start.x, end.x, amount),
+    lerp(start.y, end.y, amount),
+    lerp(start.z, end.z, amount),
+  )
+}
+
+function interpolateFrame(start: TrackFrame, end: TrackFrame, amount: number): TrackFrame {
+  const tangent = normalize(interpolateVector(start.tangent, end.tangent, amount), start.tangent)
+  const blendedRight = interpolateVector(start.right, end.right, amount)
+  let right = normalize(
+    subtract(blendedRight, scale(tangent, dot(blendedRight, tangent))),
+    start.right,
+  )
+  let normal = normalize(cross(tangent, right), start.normal)
+  const expectedNormal = interpolateVector(start.normal, end.normal, amount)
+  if (dot(normal, expectedNormal) < 0) {
+    right = negate(right)
+    normal = negate(normal)
+  }
+  right = normalize(cross(normal, tangent), right)
+  return Object.freeze({ tangent, right, normal })
+}
+
+/** Sample a compiled course using a longitudinal position in simulation units. */
+export function sampleCompiledTrack(
+  compiled: CompiledTrack3D,
+  sourcePosition: number,
+): SampledTrackPoint {
+  requireFinite(sourcePosition, 'sourcePosition')
+  const clampedPosition = Math.min(Math.max(sourcePosition, 0), compiled.sourceTotalLength)
+  const segmentCoordinate = clampedPosition / SEGMENT_LENGTH
+  const segmentIndex = Math.min(
+    Math.floor(segmentCoordinate),
+    compiled.samples.length - 2,
+  )
+  const amount = Math.min(segmentCoordinate - segmentIndex, 1)
+  const start = compiled.samples[compiled.sampleBySourceSegment[segmentIndex]]
+  const end = compiled.samples[start.index + 1]
+
+  return Object.freeze({
+    sourcePosition: clampedPosition,
+    sourceSegmentIndex: segmentIndex,
+    position: interpolateVector(start.position, end.position, amount),
+    frame: interpolateFrame(start.frame, end.frame, amount),
+    halfWidth: lerp(start.halfWidth, end.halfWidth, amount),
+    elevation: lerp(start.elevation, end.elevation, amount),
+    cumulativeDistance: lerp(
+      start.cumulativeDistance,
+      end.cumulativeDistance,
+      amount,
+    ),
+  })
+}
+
 export function positionAtLateralOffset(
-  sample: CompiledTrackSample,
+  sample: Pick<CompiledTrackSample, 'position' | 'frame'>,
   lateralOffset: number,
   simulationUnitsPerRenderUnit: number,
 ): Vec3 {

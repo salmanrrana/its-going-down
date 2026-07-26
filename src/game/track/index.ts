@@ -4,6 +4,7 @@ export {
   compileTrack3D,
   generateCompiledTrack3D,
   positionAtLateralOffset,
+  sampleCompiledTrack,
   toFloatingOrigin,
 } from './compiler'
 export type {
@@ -20,6 +21,7 @@ export type {
   CompiledTrackSample,
   CompiledTransform,
   GeneratedTrackCompilationOptions,
+  SampledTrackPoint,
   TrackCompilationOptions,
   TrackFrame,
   Vec3,

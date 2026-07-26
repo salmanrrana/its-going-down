@@ -21,7 +21,7 @@ export class ChaseCameraRig {
   private readonly desired = new Vector3()
 
   constructor() {
-    this.camera.position.set(0, 3.25, 6.7)
+    this.camera.position.set(0, 3.25, -6.7)
   }
 
   resize(width: number, height: number): void {
@@ -38,11 +38,11 @@ export class ChaseCameraRig {
     this.desired.set(
       -frame.lean * 0.38 + shakeX,
       3.2 + lift + frame.speed01 * 0.18 + shakeY,
-      6.5 + speedPullback,
+      -6.5 - speedPullback,
     )
     const damping = damp(0, 1, 8, Math.max(dt, 1 / 120))
     this.camera.position.lerp(this.desired, damping)
-    this.target.set(frame.lean * 0.45, 0.55 + lift * 0.25, -8.5 - frame.speed01 * 4)
+    this.target.set(frame.lean * 0.45, 0.55 + lift * 0.25, 8.5 + frame.speed01 * 4)
     this.camera.lookAt(this.target)
     this.camera.rotation.z += MathUtils.clamp(-frame.lean * 0.08, -0.045, 0.045)
   }

@@ -10,7 +10,6 @@ import {
 } from 'three'
 import type { LevelDef } from '../../game/types'
 import { ResourceTracker } from './resources'
-import { WORLD_SCALE } from './track-compiler'
 
 function boardColorFor(level: LevelDef): string {
   if (level.id === 'snowboard') return '#27bde8'
@@ -46,6 +45,7 @@ export class PlayerProxy {
   private readonly body = new Group()
 
   constructor(level: LevelDef) {
+    this.root.rotation.y = Math.PI
     this.root.add(this.body)
     if (level.id === 'gokart' || level.id === 'car' || level.id === 'boat') {
       this.buildVehicle(level)
@@ -115,8 +115,14 @@ export class PlayerProxy {
     }
   }
 
-  update(playerY: number, lean: number, spin: number, time: number, speed01: number): void {
-    this.root.position.set(0, 0.1 + playerY * WORLD_SCALE, 0)
+  update(
+    playerHeight: number,
+    lean: number,
+    spin: number,
+    time: number,
+    speed01: number,
+  ): void {
+    this.root.position.set(0, 0.1 + playerHeight, 0)
     this.body.rotation.z = -(lean + spin)
     this.body.rotation.x = Math.sin(time * 6) * speed01 * 0.025
   }

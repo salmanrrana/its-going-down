@@ -7,6 +7,7 @@ import {
   Vector3,
 } from 'three'
 import type { SprayEffect } from '../../game/contracts'
+import type { TrackFrame } from '../../game/track/index'
 import { ResourceTracker } from './resources'
 
 interface Particle {
@@ -51,8 +52,11 @@ export class SurfaceParticlePool {
     return this.randomState / 0x100000000
   }
 
-  emit(effect: SprayEffect, origin: Vector3): void {
+  emit(effect: SprayEffect, origin: Vector3, frame: TrackFrame): void {
     const color = new Color(effect.color)
+    const right = new Vector3(frame.right.x, frame.right.y, frame.right.z)
+    const normal = new Vector3(frame.normal.x, frame.normal.y, frame.normal.z)
+    const tangent = new Vector3(frame.tangent.x, frame.tangent.y, frame.tangent.z)
     for (let i = 0; i < effect.count; i++) {
       const angle = effect.burst
         ? this.random() * Math.PI * 2
@@ -60,16 +64,16 @@ export class SurfaceParticlePool {
       const speed = (effect.burst ? 3.8 : 2.2) * effect.force * (0.55 + this.random() * 0.75)
       const life = 0.35 + this.random() * 0.55
       const position = origin.clone()
-      position.x += (this.random() - 0.5) * 0.5
-      position.y += 0.08 + this.random() * 0.08
-      position.z += 0.18
+        .addScaledVector(right, (this.random() - 0.5) * 0.5)
+        .addScaledVector(normal, 0.08 + this.random() * 0.08)
+        .addScaledVector(tangent, -0.18)
+      const velocity = right.clone()
+        .multiplyScalar(Math.cos(angle) * speed - effect.lateralVelocity * 0.00025)
+        .addScaledVector(normal, 0.9 + this.random() * (effect.burst ? 2.8 : 1.2))
+        .addScaledVector(tangent, -(0.8 + Math.sin(angle) * speed))
       const particle: Particle = {
         position,
-        velocity: new Vector3(
-          Math.cos(angle) * speed - effect.lateralVelocity * 0.00025,
-          0.9 + this.random() * (effect.burst ? 2.8 : 1.2),
-          0.8 + Math.sin(angle) * speed,
-        ),
+        velocity,
         color,
         life,
       }

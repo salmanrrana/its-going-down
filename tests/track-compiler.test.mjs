@@ -319,6 +319,35 @@ describe('centerline samples and transported frames', () => {
       compiled.samples[compiled.samples.length - 1].cumulativeDistance,
     )
   })
+
+  it('samples arbitrary simulation positions with stable transported frames', () => {
+    const compiled = compiler.generateCompiledTrack3D(
+      levelsModule.LEVELS[0],
+      levelsModule.DIFFICULTIES[1],
+      2026,
+      { simulationUnitsPerRenderUnit: 1000 },
+    )
+    const sourcePosition = trackModule.SEGMENT_LENGTH * 137.375
+    const sampled = compiler.sampleCompiledTrack(compiled, sourcePosition)
+    const start = compiled.samples[137]
+    const end = compiled.samples[138]
+
+    assert.equal(sampled.sourcePosition, sourcePosition)
+    assert.equal(sampled.sourceSegmentIndex, 137)
+    assertVectorClose(sampled.position, {
+      x: start.position.x + (end.position.x - start.position.x) * 0.375,
+      y: start.position.y + (end.position.y - start.position.y) * 0.375,
+      z: start.position.z + (end.position.z - start.position.z) * 0.375,
+    })
+    assertOrthonormalFrame(sampled.frame, 'interpolated frame')
+    assert.equal(Object.isFrozen(sampled), true)
+    assert.equal(Object.isFrozen(sampled.frame), true)
+
+    const terminal = compiler.sampleCompiledTrack(compiled, Number.MAX_VALUE)
+    assert.equal(terminal.sourcePosition, compiled.sourceTotalLength)
+    assertVectorClose(terminal.position, compiled.samples.at(-1).position)
+    assertOrthonormalFrame(terminal.frame, 'terminal frame')
+  })
 })
 
 describe('compiled entity placement', () => {

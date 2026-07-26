@@ -12,6 +12,12 @@ import { clamp } from '../../core/math'
 import type { GameSnapshot, GameView, SprayEffect } from '../../game/contracts'
 import { interpolateRenderState } from '../../game/render-state'
 import type { Track } from '../../game/track'
+import {
+  compileTrack3D,
+  positionAtLateralOffset,
+  sampleCompiledTrack,
+  type SampledTrackPoint,
+} from '../../game/track/index'
 import { ChaseCameraRig } from './camera-rig'
 import { addLighting } from './lighting'
 import { RenderMetricsCollector, type ThreeRenderMetrics } from './metrics'
@@ -25,7 +31,8 @@ import {
 } from './quality'
 import { createRenderer, resizeRenderer } from './renderer-config'
 import { SurfaceParticlePool } from './surface-particles'
-import { WORLD_SCALE } from './track-compiler'
+
+const THREE_SIMULATION_UNITS_PER_RENDER_UNIT = 1000
 
 export interface ThreeGameViewOptions {
   readonly onAvailabilityChange?: (available: boolean) => void
@@ -53,6 +60,7 @@ export class ThreeGameView implements GameView {
   private world: ProceduralWorld | null = null
   private player: PlayerProxy | null = null
   private activeTrack: Track | null = null
+  private lastTrackSample: SampledTrackPoint | null = null
   private lastPosition = 0
   private lastRenderTime = performance.now()
   private contextLost = false
@@ -73,7 +81,8 @@ export class ThreeGameView implements GameView {
     this.metricsOverlay = new URLSearchParams(window.location.search).has('metrics')
       ? this.createMetricsOverlay()
       : null
-    this.damageFlash.position.z = -0.09
+    this.damageFlash.position.z = 0.09
+    this.damageFlash.rotation.y = Math.PI
     this.damageFlash.renderOrder = 10_000
     this.damageFlash.frustumCulled = false
     this.cameraRig.camera.add(this.damageFlash)
@@ -146,6 +155,7 @@ export class ThreeGameView implements GameView {
     this.contextLost = false
     this.fatalError = false
     this.activeTrack = null
+    this.lastTrackSample = null
     this.lastRenderTime = performance.now()
     this.options.onAvailabilityChange?.(true)
     this.showStatus('3D graphics restored.')
@@ -181,8 +191,18 @@ export class ThreeGameView implements GameView {
     this.player?.dispose()
     this.world?.dispose()
     this.particles.clear()
+    this.lastTrackSample = null
 
-    this.world = new ProceduralWorld(snapshot.track, snapshot.level, this.quality)
+    const compiled = compileTrack3D(snapshot.track, {
+      trackId: `three:${snapshot.level.id}`,
+      simulationUnitsPerRenderUnit: THREE_SIMULATION_UNITS_PER_RENDER_UNIT,
+    })
+    this.world = new ProceduralWorld(
+      snapshot.track,
+      compiled,
+      snapshot.level,
+      this.quality,
+    )
     this.player = new PlayerProxy(snapshot.level)
     this.world.root.add(this.particles.points)
     this.scene.add(this.world.root, this.player.root)
@@ -204,10 +224,18 @@ export class ThreeGameView implements GameView {
     if (!world || !player) return
 
     const state = interpolateRenderState(previous, current, alpha)
-    const sample = world.compiled.sample(state.position)
+    const sample = sampleCompiledTrack(world.compiled, state.position)
+    const renderScale = 1 / world.compiled.simulationUnitsPerRenderUnit
+    this.lastTrackSample = sample
     this.lastPosition = state.position
     world.update(sample, state.playerX)
-    player.update(state.playerY, state.lean, state.spin, state.time, state.speed01)
+    player.update(
+      state.playerY * renderScale,
+      state.lean,
+      state.spin,
+      state.time,
+      state.speed01,
+    )
     this.damageMaterial.opacity = clamp(state.hurt * 0.32, 0, 0.32)
     this.damageFlash.visible = this.damageMaterial.opacity > 0.001
     const now = performance.now()
@@ -217,7 +245,7 @@ export class ThreeGameView implements GameView {
       {
         speed01: state.speed01,
         lean: state.lean,
-        playerHeight: state.playerY * WORLD_SCALE,
+        playerHeight: state.playerY * renderScale,
         shake: this.reducedMotion ? 0 : state.shake,
         time: state.time,
       },
@@ -238,14 +266,20 @@ export class ThreeGameView implements GameView {
 
   handleEffect(effect: SprayEffect): void {
     if (!this.world) return
-    const sample = this.world.compiled.sample(this.lastPosition)
-    const lateral = effect.playerX * WORLD_SCALE
-    const origin = new Vector3(
-      sample.x + Math.cos(sample.heading) * lateral,
-      sample.y + effect.playerY * WORLD_SCALE,
-      sample.z + Math.sin(sample.heading) * lateral,
+    const { compiled } = this.world
+    const sample = this.lastTrackSample ?? sampleCompiledTrack(compiled, this.lastPosition)
+    const surfacePosition = positionAtLateralOffset(
+      sample,
+      effect.playerX,
+      compiled.simulationUnitsPerRenderUnit,
     )
-    this.particles.emit(effect, origin)
+    const height = effect.playerY / compiled.simulationUnitsPerRenderUnit
+    const origin = new Vector3(
+      surfacePosition.x + sample.frame.normal.x * height,
+      surfacePosition.y + sample.frame.normal.y * height,
+      surfacePosition.z + sample.frame.normal.z * height,
+    )
+    this.particles.emit(effect, origin, sample.frame)
   }
 
   private updateMetricsOverlay(metrics: ThreeRenderMetrics): void {

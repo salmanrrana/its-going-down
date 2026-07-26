@@ -6,11 +6,11 @@
   "description": "It's Going Down — a downhill arcade game for kids of all ages.",
   "scripts": {
     "dev": "vite",
-    "test": "node --test --test-concurrency=1 tests/*.test.mjs",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
-    "test": "vitest run",
+    "test": "vitest run && npm run test:compiler",
+    "test:compiler": "node --test --test-concurrency=1 tests/track-compiler.test.mjs",
     "test:watch": "vitest"
   },
   "devDependencies": {
