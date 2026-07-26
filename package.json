@@ -6,6 +6,7 @@
   "description": "It's Going Down — a downhill arcade game for kids of all ages.",
   "scripts": {
     "dev": "vite",
+    "test": "node --test --test-concurrency=1 tests/*.test.mjs",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
