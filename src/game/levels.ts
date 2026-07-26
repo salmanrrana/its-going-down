@@ -30,13 +30,15 @@ export const LEVELS: LevelDef[] = [
       ridgeNear: '#3d5a86',
       // The verges stay bluer than the piste so the run reads to a five-year-old,
       // but only just: a real mountain is white on white, and the grooming plus
-      // the shoulder shadow carry most of the legibility.
-      groundA: '#c4daf0',
-      groundB: '#bed5ec',
-      laneA: '#ffffff',
-      laneB: '#fafcff',
-      rumbleA: '#a7c6e4',
-      rumbleB: '#b0cde9',
+      // the shoulder shadow carry most of the legibility. Each A/B pair is
+      // identical on purpose — banding across snow reads as tiles, and the
+      // corduroy pass supplies all the surface texture this level needs.
+      groundA: '#c2d9ef',
+      groundB: '#c2d9ef',
+      laneA: '#fdfeff',
+      laneB: '#fdfeff',
+      rumbleA: '#abc9e6',
+      rumbleB: '#abc9e6',
       centerLine: null,
       fog: '#bcd8f2',
       accent: '#5ec8ff',
