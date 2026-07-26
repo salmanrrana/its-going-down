@@ -1,14 +1,4 @@
-/**
- * Unified input. Everything the game needs collapses to three numbers:
- *   steer  -1..1
- *   jump   edge-triggered boolean
- *   pause  edge-triggered boolean
- *
- * Keyboard: arrows / WASD, Space or Up to jump.
- * Touch: hold the left or right half of the screen to steer. Drag your thumb
- *        to steer proportionally. A quick tap with a second finger, or a swipe
- *        up, jumps. Designed so a 4-year-old can just mash a side and go.
- */
+import type { InputFrame } from '../game/contracts'
 
 interface Pointer {
   id: number
@@ -20,14 +10,20 @@ interface Pointer {
   jumped: boolean
 }
 
+export interface DomInputFrame {
+  input: InputFrame
+  pause: boolean
+}
+
+/** Owns DOM input and exposes one renderer-neutral sample per animation frame. */
 export class Input {
-  steer = 0
   private keys = new Set<string>()
   private pointers = new Map<number, Pointer>()
   private jumpQueued = false
   private pauseQueued = false
   private width = 1
   private height = 1
+  private target: HTMLElement | null = null
   /** Set true once any touch is seen, so the UI can swap hints to touch wording. */
   touchSeen = false
 
@@ -45,8 +41,7 @@ export class Input {
   }
 
   private onBlur = (): void => {
-    this.keys.clear()
-    this.pointers.clear()
+    this.clear()
   }
 
   private onPointerDown = (e: PointerEvent): void => {
@@ -61,12 +56,12 @@ export class Input {
       startTime: performance.now(),
       jumped: false,
     }
-    // Second finger down while one is already steering = jump.
     if (this.pointers.size > 0) {
       this.jumpQueued = true
       p.jumped = true
     }
     this.pointers.set(e.pointerId, p)
+    this.target?.setPointerCapture(e.pointerId)
   }
 
   private onPointerMove = (e: PointerEvent): void => {
@@ -74,7 +69,6 @@ export class Input {
     if (!p) return
     p.x = e.clientX
     p.y = e.clientY
-    // Swipe up to jump.
     if (!p.jumped && p.startY - p.y > this.height * 0.08) {
       this.jumpQueued = true
       p.jumped = true
@@ -83,11 +77,17 @@ export class Input {
 
   private onPointerUp = (e: PointerEvent): void => {
     this.pointers.delete(e.pointerId)
+    if (this.target?.hasPointerCapture(e.pointerId)) {
+      this.target.releasePointerCapture(e.pointerId)
+    }
   }
 
   private onContextMenu = (e: Event): void => e.preventDefault()
 
   attach(target: HTMLElement): void {
+    if (this.target === target) return
+    this.detach()
+    this.target = target
     window.addEventListener('keydown', this.onKeyDown)
     window.addEventListener('keyup', this.onKeyUp)
     window.addEventListener('blur', this.onBlur)
@@ -98,47 +98,60 @@ export class Input {
     target.addEventListener('contextmenu', this.onContextMenu)
   }
 
+  detach(): void {
+    const target = this.target
+    if (!target) return
+    window.removeEventListener('keydown', this.onKeyDown)
+    window.removeEventListener('keyup', this.onKeyUp)
+    window.removeEventListener('blur', this.onBlur)
+    target.removeEventListener('pointerdown', this.onPointerDown)
+    target.removeEventListener('pointermove', this.onPointerMove)
+    target.removeEventListener('pointerup', this.onPointerUp)
+    target.removeEventListener('pointercancel', this.onPointerUp)
+    target.removeEventListener('contextmenu', this.onContextMenu)
+    for (const id of this.pointers.keys()) {
+      if (target.hasPointerCapture(id)) target.releasePointerCapture(id)
+    }
+    this.target = null
+    this.clear()
+  }
+
   resize(width: number, height: number): void {
     this.width = width
     this.height = height
   }
 
-  /** Call once per frame, before reading `steer`. */
-  update(): void {
-    let s = 0
-    if (this.keys.has('arrowleft') || this.keys.has('a')) s -= 1
-    if (this.keys.has('arrowright') || this.keys.has('d')) s += 1
+  /** Sample held and edge-triggered controls exactly once per animation frame. */
+  sample(): DomInputFrame {
+    let steer = 0
+    if (this.keys.has('arrowleft') || this.keys.has('a')) steer -= 1
+    if (this.keys.has('arrowright') || this.keys.has('d')) steer += 1
 
-    if (s === 0 && this.pointers.size > 0) {
-      // Use the oldest active pointer as the steering thumb.
+    if (steer === 0 && this.pointers.size > 0) {
       let thumb: Pointer | null = null
       for (const p of this.pointers.values()) {
         if (!thumb || p.startTime < thumb.startTime) thumb = p
       }
       if (thumb) {
         const half = this.width * 0.5
-        // Blend "which half am I holding" with "how far did I drag", so both
-        // a static hold and a deliberate drag feel right.
         const side = thumb.x < half ? -1 : 1
         const drag = (thumb.x - thumb.startX) / (this.width * 0.22)
         const held = (thumb.x - half) / (half * 0.75)
-        s = Math.abs(drag) > 0.25 ? drag : held
-        if (Math.abs(s) < 0.15) s = side * 0.15
+        steer = Math.abs(drag) > 0.25 ? drag : held
+        if (Math.abs(steer) < 0.15) steer = side * 0.15
       }
     }
-    this.steer = Math.max(-1, Math.min(1, s))
-  }
 
-  consumeJump(): boolean {
-    const j = this.jumpQueued
+    const frame: DomInputFrame = {
+      input: {
+        steer: Math.max(-1, Math.min(1, steer)),
+        jump: this.jumpQueued,
+      },
+      pause: this.pauseQueued,
+    }
     this.jumpQueued = false
-    return j
-  }
-
-  consumePause(): boolean {
-    const p = this.pauseQueued
     this.pauseQueued = false
-    return p
+    return frame
   }
 
   clear(): void {
@@ -146,7 +159,6 @@ export class Input {
     this.pauseQueued = false
     this.keys.clear()
     this.pointers.clear()
-    this.steer = 0
   }
 }
 

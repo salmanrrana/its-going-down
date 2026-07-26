@@ -1,6 +1,10 @@
 import { clamp, lerp } from '../core/math'
-import { DRAW_DISTANCE, SEGMENT_LENGTH, type Segment, type Track } from './track'
+import type { GameSnapshot, GameView, SprayEffect } from './contracts'
+import { DRAW_DISTANCE, SEGMENT_LENGTH, type Segment } from './track'
 import type { LevelDef, ObstacleKind, Palette, SceneryKind } from './types'
+
+// Preserve the established public import while keeping simulation constants renderer-neutral.
+export { PLAYER_HALF_WIDTH } from './constants'
 
 /**
  * Pseudo-3D renderer in the classic segment-projection style: the track is a
@@ -11,8 +15,6 @@ import type { LevelDef, ObstacleKind, Palette, SceneryKind } from './types'
 
 const CAMERA_DEPTH = 0.84
 const CAMERA_HEIGHT = 1500
-/** Player half-width in world units — the collision footprint. */
-export const PLAYER_HALF_WIDTH = 250
 /**
  * Near plane. Without this, segments approaching the camera divide by a tiny
  * dz and explode to many screen-widths across, swamping the frame.
@@ -33,7 +35,7 @@ interface Projected {
   scale: number
 }
 
-export interface Particle {
+interface Particle {
   x: number
   y: number
   vx: number
@@ -44,36 +46,27 @@ export interface Particle {
   color: string
 }
 
-export interface RenderState {
-  /** Player's lateral offset in world units. */
-  playerX: number
-  /** Player's height above the surface. 0 when grounded. */
-  playerY: number
-  /** Distance travelled along the track. */
-  position: number
-  /** Current speed, world units/sec. */
-  speed: number
-  /** Normalized 0..1 speed, for effects. */
-  speed01: number
-  /** Lean angle in radians. */
-  lean: number
-  /** Rotation while airborne, radians. */
-  spin: number
-  /** Seconds since level start, for animated water and bob. */
-  time: number
-  /** 0..1 crash flash. */
-  hurt: number
-  /** Screen shake magnitude in pixels. */
-  shake: number
-  airborne: boolean
-}
+type RenderState = Pick<
+  GameSnapshot,
+  | 'playerX'
+  | 'playerY'
+  | 'position'
+  | 'speed'
+  | 'speed01'
+  | 'lean'
+  | 'spin'
+  | 'time'
+  | 'hurt'
+  | 'shake'
+  | 'airborne'
+>
 
-export class Renderer {
+export class Renderer implements GameView {
   private ctx: CanvasRenderingContext2D
   private width = 0
   private height = 0
   private dpr = 1
-  particles: Particle[] = []
+  private particles: Particle[] = []
 
   constructor(private canvas: HTMLCanvasElement) {
     const ctx = canvas.getContext('2d', { alpha: false })
@@ -99,13 +92,35 @@ export class Renderer {
     return { width: this.width, height: this.height }
   }
 
-  spawnParticle(p: Particle): void {
+  private spawnParticle(p: Particle): void {
     // Hard cap keeps a long run from ever accumulating cost.
     if (this.particles.length > 220) this.particles.shift()
     this.particles.push(p)
   }
 
-  updateParticles(dt: number): void {
+  handleEffect(effect: SprayEffect): void {
+    const baseX = this.width / 2 + effect.playerX * 0.06
+    const baseY = this.height * 0.82 - (effect.playerY / 1000) * this.height * 0.16
+    for (let i = 0; i < effect.count; i++) {
+      const angle = effect.burst
+        ? Math.random() * Math.PI * 2
+        : Math.PI * (0.9 + Math.random() * 0.5)
+      const speed =
+        (effect.burst ? 220 : 110) * effect.force * (0.5 + Math.random())
+      this.spawnParticle({
+        x: baseX + (Math.random() - 0.5) * this.width * 0.04,
+        y: baseY + (Math.random() - 0.5) * this.height * 0.01,
+        vx: Math.cos(angle) * speed - effect.lateralVelocity * 0.02,
+        vy: Math.sin(angle) * speed - 60,
+        life: 0.4 + Math.random() * 0.5,
+        maxLife: 0.9,
+        size: (effect.burst ? 4 : 3) * (0.5 + Math.random()),
+        color: effect.color,
+      })
+    }
+  }
+
+  update(dt: number): void {
     const list = this.particles
     let write = 0
     for (let i = 0; i < list.length; i++) {
@@ -139,7 +154,23 @@ export class Renderer {
     out.screenW = (scale * roadWidth * this.width) / 2
   }
 
-  render(track: Track, level: LevelDef, s: RenderState): void {
+  render(previous: GameSnapshot, current: GameSnapshot, alpha: number): void {
+    const t = clamp(alpha, 0, 1)
+    const s: RenderState = {
+      playerX: lerp(previous.playerX, current.playerX, t),
+      playerY: lerp(previous.playerY, current.playerY, t),
+      position: lerp(previous.position, current.position, t),
+      speed: lerp(previous.speed, current.speed, t),
+      speed01: lerp(previous.speed01, current.speed01, t),
+      lean: lerp(previous.lean, current.lean, t),
+      spin: lerp(previous.spin, current.spin, t),
+      time: lerp(previous.time, current.time, t),
+      hurt: lerp(previous.hurt, current.hurt, t),
+      shake: lerp(previous.shake, current.shake, t),
+      airborne: current.airborne,
+    }
+    const track = current.track
+    const level = current.level
     const ctx = this.ctx
     const { width, height } = this
     const pal = level.palette
@@ -156,10 +187,10 @@ export class Renderer {
     const baseSegment = Math.floor(s.position / SEGMENT_LENGTH) % track.segments.length
     const segments = track.segments
     const camZ = s.position
-    const current = segments[baseSegment]
+    const currentSegment = segments[baseSegment]
     const next = segments[Math.min(baseSegment + 1, segments.length - 1)]
     const segT = (s.position % SEGMENT_LENGTH) / SEGMENT_LENGTH
-    const groundY = lerp(current.y, next.y, segT)
+    const groundY = lerp(currentSegment.y, next.y, segT)
     const camY = groundY + CAMERA_HEIGHT + s.playerY * 0.7
     // Camera trails the player laterally, which makes turns read as turns.
     const camX = s.playerX * 0.72

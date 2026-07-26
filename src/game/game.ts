@@ -1,58 +1,36 @@
-import { audio } from '../core/audio'
-import { Input } from '../core/input'
 import { clamp, damp } from '../core/math'
-import { PLAYER_HALF_WIDTH, Renderer, type RenderState } from './renderer'
-import { applySurfaceBounds, OBSTACLE_HALF_WIDTH } from './rules'
+import {
+  COIN_PICKUP_RADIUS,
+  JUMP_CLEARANCE,
+  OBSTACLE_HALF_WIDTH,
+  PLAYER_HALF_WIDTH,
+} from './constants'
+import type {
+  GameEvent,
+  GamePhase,
+  GameSnapshot,
+  GameSound,
+  HudState,
+  InputFrame,
+  RunStats,
+} from './contracts'
+import { applySurfaceBounds } from './rules'
 import { generateTrack, SEGMENT_LENGTH, type Segment, type Track } from './track'
 import type { DifficultyDef, LevelDef } from './types'
 
-export type GamePhase = 'countdown' | 'running' | 'paused' | 'finished' | 'failed'
-
-export interface RunStats {
-  score: number
-  coins: number
-  hits: number
-  bestAir: number
-  timeSeconds: number
-  progress01: number
-  completed: boolean
-}
-
-export interface GameCallbacks {
-  onHudChange: (hud: HudState) => void
-  onEnd: (stats: RunStats) => void
-}
+export type { GamePhase, GameSnapshot, HudState, InputFrame, RunStats } from './contracts'
 
 export interface GameOptions {
-  /**
-   * Attract mode: the menu backdrop. Silent, unscored, auto-steering, and it
-   * loops forever instead of ever finishing.
-   */
+  /** Silent, unscored, auto-steering menu backdrop that loops forever. */
   attract?: boolean
 }
 
-export interface HudState {
-  score: number
-  coins: number
-  lives: number
-  maxLives: number
-  speedKph: number
-  progress01: number
-  timeSeconds: number
-  countdown: number | null
-  airborne: boolean
-  combo: number
-}
-
-const COIN_PICKUP_RADIUS = 380
-/** Clearance needed to fly over a hazard rather than hit it. */
-const JUMP_CLEARANCE = 330
+const NO_INPUT: InputFrame = { steer: 0, jump: false }
 
 export class Game {
   private track: Track
   private phase: GamePhase = 'countdown'
 
-  // Player state, all in world units.
   private playerX = 0
   private playerY = 0
   private playerVY = 0
@@ -65,7 +43,6 @@ export class Game {
 
   private time = 0
   private countdown = 3
-  /** Attract mode steers itself with a slow sine weave. */
   private attractPhase = 0
   private hurt = 0
   private shake = 0
@@ -84,44 +61,34 @@ export class Game {
 
   private lastHud: HudState | null = null
   private topSpeed: number
+  private events: GameEvent[] = []
+  private previousState: GameSnapshot
+  private currentState: GameSnapshot
 
   constructor(
-    private level: LevelDef,
-    private difficulty: DifficultyDef,
-    private input: Input,
-    private renderer: Renderer,
-    private callbacks: GameCallbacks,
+    private readonly level: LevelDef,
+    private readonly difficulty: DifficultyDef,
     seed: number,
-    private options: GameOptions = {},
+    private readonly options: GameOptions = {},
   ) {
     this.track = generateTrack(level, difficulty, seed)
     this.maxLives = difficulty.lives
     this.lives = difficulty.lives
     this.topSpeed = level.physics.topSpeed * difficulty.speedScale
+    this.currentState = this.captureSnapshot()
+    this.previousState = this.currentState
   }
 
   get currentPhase(): GamePhase {
     return this.phase
   }
 
-  /** Sound effects are suppressed entirely in attract mode. */
-  private sfx(name: Parameters<typeof audio.play>[0]): void {
-    if (this.options.attract) return
-    audio.play(name)
+  get previousSnapshot(): GameSnapshot {
+    return this.previousState
   }
 
-  pause(): void {
-    if (this.phase !== 'running' && this.phase !== 'countdown') return
-    this.phase = 'paused'
-    audio.setSpeed(0, false)
-    audio.stopMusic()
-  }
-
-  resume(): void {
-    if (this.phase !== 'paused') return
-    this.phase = this.countdown > 0 ? 'countdown' : 'running'
-    this.input.clear()
-    audio.startMusic(this.level.musicKey)
+  get currentSnapshot(): GameSnapshot {
+    return this.currentState
   }
 
   get stats(): RunStats {
@@ -136,32 +103,38 @@ export class Game {
     }
   }
 
-  private get progress01(): number {
-    return clamp(this.position / this.track.totalLength, 0, 1)
+  pause(): GameEvent[] {
+    if (this.phase !== 'running' && this.phase !== 'countdown') return []
+    this.phase = 'paused'
+    this.syncSnapshot()
+    this.events.push({ type: 'audio-speed', speed01: 0, active: false })
+    this.events.push({ type: 'music', action: 'stop' })
+    return this.takeEvents()
   }
 
-  private segmentAt(z: number): Segment {
-    const i = Math.floor(z / SEGMENT_LENGTH)
-    return this.track.segments[clamp(i, 0, this.track.segments.length - 1)]
+  resume(): GameEvent[] {
+    if (this.phase !== 'paused') return []
+    this.phase = this.countdown > 0 ? 'countdown' : 'running'
+    this.syncSnapshot()
+    this.events.push({ type: 'music', action: 'start', key: this.level.musicKey })
+    return this.takeEvents()
   }
 
-  update(dt: number): void {
+  update(dt: number, input: InputFrame = NO_INPUT): GameEvent[] {
     if (this.phase === 'paused' || this.phase === 'finished' || this.phase === 'failed') {
-      return
+      return []
     }
 
+    this.previousState = this.currentState
     const attract = this.options.attract === true
-    if (!attract) this.input.update()
     this.time += dt
 
     if (this.phase === 'countdown') {
-      // Attract mode skips straight to rolling.
       this.countdown -= attract ? 99 : dt
       if (this.countdown <= 0) {
         this.phase = 'running'
-        if (!attract) audio.play('start')
+        this.emitSound('start')
       }
-      // Roll forward gently during the countdown so the world is alive.
       this.speed = damp(this.speed, this.topSpeed * 0.18, 1.6, dt)
     }
 
@@ -169,7 +142,6 @@ export class Game {
     const running = this.phase === 'running'
     const throttle = this.crashRecovery > 0 ? 0.35 : 1
 
-    // --- Longitudinal -------------------------------------------------------
     if (running) {
       const target = this.topSpeed * throttle
       const rate = this.speed < target ? phys.accel : phys.offSurfaceDrag
@@ -185,67 +157,51 @@ export class Game {
     const speed01 = this.topSpeed > 0 ? this.speed / this.topSpeed : 0
     const seg = this.segmentAt(this.position)
 
-    // --- Lateral ------------------------------------------------------------
-    let steer = running ? this.input.steer : 0
+    const requestedSteer = Number.isFinite(input.steer) ? input.steer : 0
+    let steer = running ? clamp(requestedSteer, -1, 1) : 0
     if (attract) {
-      // A lazy weave down the run, so the menu backdrop is always in motion.
       this.attractPhase += dt
       steer = Math.sin(this.attractPhase * 0.55) * 0.7
     }
 
-    // Easy-mode assist: nudge away from the nearest hazard ahead so young kids
-    // rarely hit anything even with sloppy input.
     if (this.difficulty.assist > 0 && running) {
       const assist = this.lookaheadAssist()
       steer = clamp(steer + assist * this.difficulty.assist, -1, 1)
     }
 
-    // Steering authority scales with speed: you can't carve while stopped.
     const authority = 0.35 + speed01 * 0.65
     this.lateralV += steer * phys.steerRate * authority * 1000 * dt
-    // Centrifugal pull through corners — this is what makes turns feel physical.
-    // Scaled to stay well under steering authority so a corner can always be
-    // held; it should push you wide, never drive you off on its own.
     this.lateralV -= seg.curve * speed01 * speed01 * phys.centrifugal * 90 * dt
-    // Grip bleeds lateral velocity; low-grip levels slide, high-grip levels bite.
     this.lateralV *= Math.exp(-phys.grip * dt)
     this.playerX += this.lateralV * dt
 
-    // --- Surface bounds -----------------------------------------------------
-    // playerX IS the offset from the road centre, so no extra bookkeeping.
+    // playerX is the offset from the road centre, so the shared helper can
+    // enforce Easy's soft wall and the outer boundary for other difficulties.
     const unlosable = this.difficulty.lives === 0
-    const offSurface = Math.abs(this.playerX) > seg.width
-    if (offSurface) {
-      const bounds = applySurfaceBounds(this.playerX, this.lateralV, seg.width, unlosable)
-      this.playerX = bounds.playerX
-      this.lateralV = bounds.lateralV
-    }
+    const bounds = applySurfaceBounds(this.playerX, this.lateralV, seg.width, unlosable)
+    this.playerX = bounds.playerX
+    this.lateralV = bounds.lateralV
     const relX = this.playerX
 
-    if (offSurface && !unlosable) {
-      // Drag and rumble when you stray onto the verge.
+    if (bounds.offSurface && !unlosable) {
       this.speed -= phys.offSurfaceDrag * 0.55 * dt
       this.shake = Math.max(this.shake, 3.5 * speed01)
       this.emitSpray(6, this.level.palette.spray, 0.5)
     }
 
-    // --- Vertical: ramps, jumps, gravity ------------------------------------
     const airborne = this.playerY > 0.5
-    if (running && this.difficulty.jumpEnabled && this.input.consumeJump() && !airborne) {
+    if (running && this.difficulty.jumpEnabled && input.jump && !airborne) {
       this.playerVY = phys.jumpImpulse
       this.spinRate = this.lateralV * 0.00035
-      this.sfx('jump')
-    } else if (!this.difficulty.jumpEnabled) {
-      this.input.consumeJump()
+      this.emitSound('jump')
     }
 
-    // Ramp launch — hitting one always launches you, in every difficulty.
     if (seg.ramp && !airborne && running) {
       const dxr = Math.abs(relX - seg.ramp.x)
       if (dxr < seg.ramp.width) {
         this.playerVY = phys.jumpImpulse * seg.ramp.power * (0.9 + speed01 * 0.5)
         this.spinRate = this.lateralV * 0.0003
-        this.sfx('ramp')
+        this.emitSound('ramp')
         this.addScore(75)
       }
     }
@@ -263,7 +219,7 @@ export class Game {
           this.bestAir = Math.max(this.bestAir, this.airTime)
           this.addScore(Math.round(this.airTime * 160 * (1 + this.combo * 0.1)))
           this.bumpCombo()
-          this.sfx('land')
+          this.emitSound('land')
           this.emitSpray(18, this.level.palette.spray, 1.4)
           this.shake = Math.max(this.shake, 5)
         }
@@ -276,7 +232,6 @@ export class Game {
     this.spin += this.spinRate * dt * 60 * 0.02
     if (this.playerY <= 0) this.spin = damp(this.spin, 0, 12, dt)
 
-    // --- Lean, effects ------------------------------------------------------
     const leanTarget = clamp(this.lateralV / 2600, -1, 1) * phys.lean
     this.lean = damp(this.lean, leanTarget, 9, dt)
     this.hurt = Math.max(0, this.hurt - dt * 2.2)
@@ -288,41 +243,62 @@ export class Game {
     }
 
     if (running && this.playerY <= 0 && speed01 > 0.3) {
-      // Continuous trail behind the player when carving hard.
       if (Math.abs(this.lateralV) > 900 && Math.random() < 0.6) {
         this.emitSpray(2, this.level.palette.spray, 0.6)
       }
     }
 
-    // --- Collisions and pickups --------------------------------------------
-    // Attract mode ghosts through everything — it's scenery, not a run.
-    if (running && !attract) this.resolveCollisions(relX)
+    if (running && !attract) {
+      this.resolveCollisions(relX)
+      if (!this.isActive()) {
+        this.pushHud()
+        this.events.push({ type: 'run-ended', stats: this.stats })
+        this.currentState = this.captureSnapshot()
+        this.previousState = this.currentState
+        return this.takeEvents()
+      }
+    }
 
-    // --- Scoring ------------------------------------------------------------
     if (running) {
       this.score += this.speed * dt * 0.012 * this.difficulty.scoreScale
     }
 
-    if (!attract) audio.setSpeed(speed01, running)
+    if (!attract) this.events.push({ type: 'audio-speed', speed01, active: running })
 
-    // --- Finish -------------------------------------------------------------
+    let wrapped = false
     if (this.position >= this.track.totalLength - SEGMENT_LENGTH * 4) {
       if (attract) {
-        // Loop the flythrough forever rather than ever ending.
         this.position = 0
         this.playerX = 0
         this.lateralV = 0
+        wrapped = true
       } else {
         this.finish(true)
-        return
       }
     }
 
-    this.renderer.updateParticles(dt)
-    if (!attract) this.pushHud()
+    if (!attract) {
+      this.pushHud()
+      if (!this.isActive()) this.events.push({ type: 'run-ended', stats: this.stats })
+    }
+    this.currentState = this.captureSnapshot()
+    if (wrapped || !this.isActive()) this.previousState = this.currentState
+    return this.takeEvents()
   }
 
-  /** Returns a steering nudge in -1..1 that steers around the nearest hazard. */
+  private get progress01(): number {
+    return clamp(this.position / this.track.totalLength, 0, 1)
+  }
+
+  private isActive(): boolean {
+    return this.phase !== 'finished' && this.phase !== 'failed'
+  }
+
+  private segmentAt(z: number): Segment {
+    const i = Math.floor(z / SEGMENT_LENGTH)
+    return this.track.segments[clamp(i, 0, this.track.segments.length - 1)]
+  }
+
   private lookaheadAssist(): number {
     const relX = this.playerX
     const startSeg = Math.floor(this.position / SEGMENT_LENGTH)
@@ -333,7 +309,6 @@ export class Game {
         if (ob.spent) continue
         const dx = ob.x - relX
         if (Math.abs(dx) < OBSTACLE_HALF_WIDTH + PLAYER_HALF_WIDTH + 160) {
-          // Steer toward whichever side has more room on the surface.
           const away = dx > 0 ? -1 : 1
           const room = away < 0 ? relX + seg.width : seg.width - relX
           return room > 700 ? away : -away
@@ -346,7 +321,6 @@ export class Game {
   private resolveCollisions(relX: number): void {
     const startSeg = Math.floor(this.position / SEGMENT_LENGTH)
     const segs = this.track.segments
-    // Check a small window around the player to avoid tunnelling at speed.
     const span = Math.max(2, Math.ceil((this.speed * (1 / 30)) / SEGMENT_LENGTH) + 1)
     for (let i = startSeg; i < Math.min(startSeg + span, segs.length); i++) {
       const seg = segs[i]
@@ -358,7 +332,7 @@ export class Game {
           this.coins++
           this.addScore(50 * (1 + this.combo * 0.15))
           this.bumpCombo()
-          this.sfx('coin')
+          this.emitSound('coin')
         }
       }
 
@@ -367,13 +341,10 @@ export class Game {
         if (ob.spent) continue
         const halfW = OBSTACLE_HALF_WIDTH * ob.scale
         if (Math.abs(ob.x - relX) > halfW + PLAYER_HALF_WIDTH) continue
-        // Cleared it in the air?
         if (this.playerY > JUMP_CLEARANCE) {
-          if (!ob.spent) {
-            ob.spent = true
-            this.addScore(120)
-            this.bumpCombo()
-          }
+          ob.spent = true
+          this.addScore(120)
+          this.bumpCombo()
           continue
         }
         ob.spent = true
@@ -395,14 +366,12 @@ export class Game {
     this.lateralV *= -0.35
     this.playerVY = 0
     this.playerY = 0
-    this.sfx('crash')
+    this.emitSound('crash')
     this.emitSpray(26, '#ffffff', 2, true)
 
     if (this.maxLives > 0) {
       this.lives--
-      if (this.lives <= 0) {
-        this.finish(false)
-      }
+      if (this.lives <= 0) this.finish(false)
     }
   }
 
@@ -415,40 +384,38 @@ export class Game {
     this.comboTimer = 3
   }
 
+  private emitSound(sound: GameSound): void {
+    if (!this.options.attract) this.events.push({ type: 'sound', sound })
+  }
+
   private emitSpray(count: number, color: string, force: number, burst = false): void {
-    const { width, height } = this.renderer.size
-    const baseX = width / 2 + this.playerX * 0.06
-    const baseY = height * 0.82 - (this.playerY / 1000) * height * 0.16
-    for (let i = 0; i < count; i++) {
-      const a = burst ? Math.random() * Math.PI * 2 : Math.PI * (0.9 + Math.random() * 0.5)
-      const sp = (burst ? 220 : 110) * force * (0.5 + Math.random())
-      this.renderer.spawnParticle({
-        x: baseX + (Math.random() - 0.5) * width * 0.04,
-        y: baseY + (Math.random() - 0.5) * height * 0.01,
-        vx: Math.cos(a) * sp - this.lateralV * 0.02,
-        vy: Math.sin(a) * sp - 60,
-        life: 0.4 + Math.random() * 0.5,
-        maxLife: 0.9,
-        size: (burst ? 4 : 3) * (0.5 + Math.random()),
+    this.events.push({
+      type: 'view-effect',
+      effect: {
+        type: 'spray',
+        count,
         color,
-      })
-    }
+        force,
+        burst,
+        playerX: this.playerX,
+        playerY: this.playerY,
+        lateralVelocity: this.lateralV,
+      },
+    })
   }
 
   private finish(completed: boolean): void {
     if (this.phase === 'finished' || this.phase === 'failed') return
     this.phase = completed ? 'finished' : 'failed'
     if (completed) {
-      // Completion bonus scales with how clean the run was.
       const cleanBonus = Math.max(0, 500 - this.hits * 100)
       this.score += (1000 + cleanBonus) * this.difficulty.scoreScale
-      this.sfx('finish')
+      this.emitSound('finish')
     } else {
-      this.sfx('fail')
+      this.emitSound('fail')
     }
-    audio.setSpeed(0, false)
-    audio.stopMusic()
-    this.callbacks.onEnd(this.stats)
+    this.events.push({ type: 'audio-speed', speed01: 0, active: false })
+    this.events.push({ type: 'music', action: 'stop' })
   }
 
   private pushHud(): void {
@@ -457,7 +424,6 @@ export class Game {
       coins: this.coins,
       lives: this.lives,
       maxLives: this.maxLives,
-      // Map world units to a believable km/h readout.
       speedKph: Math.round((this.speed / 1000) * 13),
       progress01: this.progress01,
       timeSeconds: this.time,
@@ -466,7 +432,6 @@ export class Game {
       combo: this.combo,
     }
     const prev = this.lastHud
-    // Only notify the DOM layer when something visible actually changed.
     if (
       !prev ||
       prev.score !== hud.score ||
@@ -479,12 +444,15 @@ export class Game {
       Math.floor(prev.timeSeconds * 10) !== Math.floor(hud.timeSeconds * 10)
     ) {
       this.lastHud = hud
-      this.callbacks.onHudChange(hud)
+      this.events.push({ type: 'hud-changed', hud })
     }
   }
 
-  render(): void {
-    const state: RenderState = {
+  private captureSnapshot(): GameSnapshot {
+    return {
+      track: this.track,
+      level: this.level,
+      phase: this.phase,
       playerX: this.playerX,
       playerY: this.playerY,
       position: this.position,
@@ -497,6 +465,16 @@ export class Game {
       shake: this.shake,
       airborne: this.playerY > 0.5,
     }
-    this.renderer.render(this.track, this.level, state)
+  }
+
+  private syncSnapshot(): void {
+    this.previousState = this.currentState
+    this.currentState = this.captureSnapshot()
+  }
+
+  private takeEvents(): GameEvent[] {
+    const events = this.events
+    this.events = []
+    return events
   }
 }
