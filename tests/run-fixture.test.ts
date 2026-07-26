@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { parseRunFixture, resolveRunSelection } from '../src/game/run-fixture'
+import {
+  parseRunFixture,
+  resolveRunSelection,
+  RunFixtureError,
+} from '../src/game/run-fixture'
+
+const fallback = { level: 'snowboard', difficulty: 'easy' } as const
 
 describe('browser run fixture', () => {
   it('selects a deterministic level, difficulty, and seed from the URL', () => {
@@ -10,31 +16,31 @@ describe('browser run fixture', () => {
     })
   })
 
+  it('distinguishes an ordinary URL with no fixture parameters', () => {
+    expect(parseRunFixture('')).toBeNull()
+    expect(parseRunFixture('?campaign=summer')).toBeNull()
+    expect(resolveRunSelection('?campaign=summer', fallback)).toEqual({
+      ...fallback,
+      seed: null,
+    })
+  })
+
   it('applies the complete URL fixture over persisted run defaults', () => {
     expect(
-      resolveRunSelection('?level=boat&difficulty=hard&seed=99', {
-        level: 'snowboard',
-        difficulty: 'easy',
-      }),
+      resolveRunSelection('?level=boat&difficulty=hard&seed=99', fallback),
     ).toEqual({ level: 'boat', difficulty: 'hard', seed: 99 })
-
-    expect(
-      resolveRunSelection('?level=boat&difficulty=hard', {
-        level: 'snowboard',
-        difficulty: 'easy',
-      }),
-    ).toEqual({ level: 'snowboard', difficulty: 'easy', seed: null })
   })
 
   it.each([
-    '',
     '?level=boat&difficulty=hard',
+    '?level=&difficulty=hard&seed=1',
     '?level=missing&difficulty=hard&seed=1',
     '?level=boat&difficulty=missing&seed=1',
     '?level=boat&difficulty=hard&seed=-1',
     '?level=boat&difficulty=hard&seed=1.5',
     '?level=boat&difficulty=hard&seed=4294967296',
-  ])('ignores incomplete or invalid fixture query %s', (search) => {
-    expect(parseRunFixture(search)).toBeNull()
+  ])('detects invalid fixture query %s without falling back', (search) => {
+    expect(() => parseRunFixture(search)).toThrow(RunFixtureError)
+    expect(() => resolveRunSelection(search, fallback)).toThrow(RunFixtureError)
   })
 })

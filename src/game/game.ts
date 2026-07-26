@@ -213,28 +213,20 @@ export class Game {
 
     // --- Surface bounds -----------------------------------------------------
     // playerX IS the offset from the road centre, so no extra bookkeeping.
-    const relX = this.playerX
-    const edge = seg.width
-    const offSurface = Math.abs(relX) > edge
-    const easyMode = this.difficulty.id === 'easy'
-
-    if (offSurface && easyMode) {
-      const bounds = applySurfaceBounds(relX, this.lateralV, edge, true)
+    const unlosable = this.difficulty.lives === 0
+    const offSurface = Math.abs(this.playerX) > seg.width
+    if (offSurface) {
+      const bounds = applySurfaceBounds(this.playerX, this.lateralV, seg.width, unlosable)
       this.playerX = bounds.playerX
       this.lateralV = bounds.lateralV
     }
+    const relX = this.playerX
 
-    if (offSurface && !easyMode) {
+    if (offSurface && !unlosable) {
       // Drag and rumble when you stray onto the verge.
       this.speed -= phys.offSurfaceDrag * 0.55 * dt
       this.shake = Math.max(this.shake, 3.5 * speed01)
       this.emitSpray(6, this.level.palette.spray, 0.5)
-      // A hard limit further out stops you leaving the world entirely.
-      const hardEdge = edge * 1.9
-      if (Math.abs(relX) > hardEdge) {
-        this.playerX = clamp(relX, -hardEdge, hardEdge)
-        this.lateralV *= -0.2
-      }
     }
 
     // --- Vertical: ramps, jumps, gravity ------------------------------------

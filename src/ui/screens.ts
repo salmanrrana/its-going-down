@@ -1,4 +1,4 @@
-import { DIFFICULTIES, LEVELS } from '../game/levels'
+import { DIFFICULTIES, isDifficultyId, isLevelId, LEVELS } from '../game/levels'
 import type { DifficultyId, LevelId } from '../game/types'
 import type { HudState, RunStats } from '../game/game'
 
@@ -23,50 +23,105 @@ const VALID_RUN_KEYS = new Set(
   ),
 )
 
-const isLevelId = (value: unknown): value is LevelId =>
-  LEVELS.some((level) => level.id === value)
+export type ProgressPersistenceIssue = {
+  kind: 'storage-unavailable' | 'malformed-data' | 'save-failed'
+  message: string
+  error: unknown
+}
 
-const isDifficultyId = (value: unknown): value is DifficultyId =>
-  DIFFICULTIES.some((difficulty) => difficulty.id === value)
+export interface LoadProgressResult {
+  progress: Progress
+  issue: ProgressPersistenceIssue | null
+}
 
-export function loadProgress(): Progress {
-  const fallback: Progress = {
-    bestScores: {},
-    cleared: [],
-    lastLevel: 'snowboard',
-    lastDifficulty: 'easy',
-    muted: false,
-  }
+export type SaveProgressResult =
+  | { ok: true }
+  | { ok: false; issue: ProgressPersistenceIssue }
+
+export function resolvePersistenceIssue(
+  current: ProgressPersistenceIssue | null,
+  saveResult: SaveProgressResult,
+): ProgressPersistenceIssue | null {
+  if (!saveResult.ok) return saveResult.issue
+  return current?.kind === 'save-failed' ? null : current
+}
+
+const createDefaultProgress = (): Progress => ({
+  bestScores: {},
+  cleared: [],
+  lastLevel: 'snowboard',
+  lastDifficulty: 'easy',
+  muted: false,
+})
+
+const createPersistenceIssue = (
+  kind: ProgressPersistenceIssue['kind'],
+  message: string,
+  error: unknown,
+): ProgressPersistenceIssue => {
+  const issue = { kind, message, error }
+  console.warn(`[progress:${kind}] ${message}`, {
+    storageKey: PROGRESS_STORAGE_KEY,
+    error,
+  })
+  return issue
+}
+
+export function loadProgress(): LoadProgressResult {
+  const fallback = createDefaultProgress()
+  let raw: string | null
   try {
-    const raw = localStorage.getItem(PROGRESS_STORAGE_KEY)
-    if (!raw) return fallback
-    const parsed: unknown = JSON.parse(raw)
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return fallback
+    raw = localStorage.getItem(PROGRESS_STORAGE_KEY)
+  } catch (error) {
+    const issue = createPersistenceIssue(
+      'storage-unavailable',
+      'Progress storage is unavailable; using defaults.',
+      error,
+    )
+    return { progress: fallback, issue }
+  }
+  if (raw === null) return { progress: fallback, issue: null }
 
-    const stored = parsed as Partial<Progress>
-    // Storage is user-writable, so retain only real run keys and finite,
-    // non-negative scores that the game could have produced.
-    const bestScores: Partial<Record<string, number>> = {}
-    if (stored.bestScores && typeof stored.bestScores === 'object') {
-      for (const [key, value] of Object.entries(stored.bestScores)) {
-        if (
-          VALID_RUN_KEYS.has(key) &&
-          typeof value === 'number' &&
-          Number.isSafeInteger(value) &&
-          value >= 0
-        ) {
-          bestScores[key] = value
-        }
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new TypeError('Stored progress must be a JSON object.')
+    }
+  } catch (error) {
+    const issue = createPersistenceIssue(
+      'malformed-data',
+      'Saved progress is malformed; using defaults.',
+      error,
+    )
+    return { progress: fallback, issue }
+  }
+
+  const stored = parsed as Partial<Progress>
+  // Storage is user-writable, so retain only real run keys and finite,
+  // non-negative scores that the game could have produced.
+  const bestScores: Partial<Record<string, number>> = {}
+  if (stored.bestScores && typeof stored.bestScores === 'object') {
+    for (const [key, value] of Object.entries(stored.bestScores)) {
+      if (
+        VALID_RUN_KEYS.has(key) &&
+        typeof value === 'number' &&
+        Number.isSafeInteger(value) &&
+        value >= 0
+      ) {
+        bestScores[key] = value
       }
     }
+  }
 
-    const cleared = Array.isArray(stored.cleared)
-      ? [...new Set(stored.cleared.filter(
-        (key): key is string => typeof key === 'string' && VALID_RUN_KEYS.has(key),
-      ))]
-      : []
+  const cleared = Array.isArray(stored.cleared)
+    ? [...new Set(stored.cleared.filter(
+      (key): key is string => typeof key === 'string' && VALID_RUN_KEYS.has(key),
+    ))]
+    : []
 
-    return {
+  return {
+    progress: {
       bestScores,
       cleared,
       lastLevel: isLevelId(stored.lastLevel) ? stored.lastLevel : fallback.lastLevel,
@@ -74,18 +129,22 @@ export function loadProgress(): Progress {
         ? stored.lastDifficulty
         : fallback.lastDifficulty,
       muted: stored.muted === true,
-    }
-  } catch {
-    // Private-mode or corrupted storage — play on with defaults.
-    return fallback
+    },
+    issue: null,
   }
 }
 
-export function saveProgress(p: Progress): void {
+export function saveProgress(p: Progress): SaveProgressResult {
   try {
     localStorage.setItem(PROGRESS_STORAGE_KEY, JSON.stringify(p))
-  } catch {
-    // Storage unavailable; progress simply won't persist.
+    return { ok: true }
+  } catch (error) {
+    const issue = createPersistenceIssue(
+      'save-failed',
+      'Progress could not be saved on this device.',
+      error,
+    )
+    return { ok: false, issue }
   }
 }
 
@@ -392,6 +451,7 @@ export class Modal {
     surface: string,
     isBest: boolean,
     best: number,
+    persistenceWarning: string | null = null,
   ): void {
     const won = stats.completed
     this.card.innerHTML = `
@@ -438,6 +498,7 @@ export class Modal {
             : ''
         }
       </div>
+      ${persistenceWarning ? `<p class="modal__warning">${persistenceWarning}</p>` : ''}
       <div class="modal__actions">
         <button class="btn btn--primary" data-role="restart">↻ Go Again</button>
         <button class="btn btn--ghost" data-role="quit">✕ Change Level</button>

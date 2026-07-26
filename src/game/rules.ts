@@ -9,7 +9,7 @@ export interface SurfaceBoundsResult {
   offSurface: boolean
 }
 
-/** Applies the Easy-mode soft wall while leaving other modes free to use verge drag. */
+/** Applies the Easy soft wall or the outer world boundary for other modes. */
 export function applySurfaceBounds(
   playerX: number,
   lateralV: number,
@@ -17,11 +17,21 @@ export function applySurfaceBounds(
   unlosable: boolean,
 ): SurfaceBoundsResult {
   const offSurface = Math.abs(playerX) > edge
-  if (!offSurface || !unlosable) return { playerX, lateralV, offSurface }
+  if (!offSurface) return { playerX, lateralV, offSurface }
 
+  if (unlosable) {
+    return {
+      playerX: clamp(playerX, -edge, edge),
+      lateralV: lateralV * 0.3,
+      offSurface,
+    }
+  }
+
+  const hardEdge = edge * 1.9
+  if (Math.abs(playerX) <= hardEdge) return { playerX, lateralV, offSurface }
   return {
-    playerX: clamp(playerX, -edge, edge),
-    lateralV: lateralV * 0.3,
+    playerX: clamp(playerX, -hardEdge, hardEdge),
+    lateralV: lateralV * -0.2,
     offSurface,
   }
 }

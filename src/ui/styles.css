@@ -726,6 +726,13 @@ body {
   color: var(--gold);
 }
 
+.modal__warning {
+  margin: 0 0 14px;
+  color: var(--gold);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
 .modal__actions {
   display: flex;
   flex-direction: column;

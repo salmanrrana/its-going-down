@@ -4,16 +4,18 @@ import { Input } from './core/input'
 import { Game, type HudState, type RunStats } from './game/game'
 import { getDifficulty, getLevel } from './game/levels'
 import { Renderer } from './game/renderer'
-import { resolveRunSelection } from './game/run-fixture'
+import { resolveRunSelection, RunFixtureError } from './game/run-fixture'
 import type { DifficultyId, LevelId } from './game/types'
 import {
   Hud,
   loadProgress,
   Menu,
   Modal,
+  resolvePersistenceIssue,
   runKey,
   saveProgress,
   type Progress,
+  type ProgressPersistenceIssue,
 } from './ui/screens'
 
 type AppState = 'menu' | 'playing'
@@ -33,13 +35,16 @@ class App {
   private level: LevelId
   private difficulty: DifficultyId
   private readonly fixtureSeed: number | null
+  private persistenceIssue: ProgressPersistenceIssue | null
 
   private lastFrame = 0
   private rafId = 0
   private hintTimer = 0
 
   constructor(root: HTMLElement) {
-    this.progress = loadProgress()
+    const loaded = loadProgress()
+    this.progress = loaded.progress
+    this.persistenceIssue = loaded.issue
     const selection = resolveRunSelection(window.location.search, {
       level: this.progress.lastLevel,
       difficulty: this.progress.lastDifficulty,
@@ -91,7 +96,7 @@ class App {
         this.progress.muted = !this.progress.muted
         audio.unlock()
         audio.setMuted(this.progress.muted)
-        saveProgress(this.progress)
+        this.persistProgress()
         this.refreshMenu()
       },
     })
@@ -146,6 +151,13 @@ class App {
     }
   }
 
+  private persistProgress(): void {
+    this.persistenceIssue = resolvePersistenceIssue(
+      this.persistenceIssue,
+      saveProgress(this.progress),
+    )
+  }
+
   private refreshMenu(): void {
     this.menu.update(this.level, this.difficulty, this.progress, this.input.touchSeen)
   }
@@ -155,7 +167,7 @@ class App {
     audio.setMuted(this.progress.muted)
     this.progress.lastLevel = this.level
     this.progress.lastDifficulty = this.difficulty
-    saveProgress(this.progress)
+    this.persistProgress()
 
     const level = getLevel(this.level)
     const difficulty = getDifficulty(this.difficulty)
@@ -209,7 +221,7 @@ class App {
     if (stats.completed && !this.progress.cleared.includes(key)) {
       this.progress.cleared.push(key)
     }
-    saveProgress(this.progress)
+    this.persistProgress()
 
     const level = getLevel(this.level)
     this.touchHints.classList.remove('touch-hints--show')
@@ -221,6 +233,7 @@ class App {
         level.surface,
         isBest,
         Math.max(previousBest, stats.score),
+        this.persistenceIssue?.message ?? null,
       )
     }, 700)
   }
@@ -297,4 +310,23 @@ class App {
 
 const root = document.getElementById('app')
 if (!root) throw new Error('Missing #app root element')
-new App(root)
+try {
+  new App(root)
+} catch (error) {
+  if (!(error instanceof RunFixtureError)) throw error
+
+  console.error('Invalid deterministic run fixture.', {
+    search: window.location.search,
+    error,
+  })
+  const screen = document.createElement('main')
+  screen.className = 'screen screen--menu fixture-error'
+  const title = document.createElement('h1')
+  title.className = 'title'
+  title.textContent = 'Invalid run link'
+  const detail = document.createElement('p')
+  detail.className = 'subtitle'
+  detail.textContent = `${error.message} Fix the URL and reload.`
+  screen.append(title, detail)
+  root.replaceChildren(screen)
+}

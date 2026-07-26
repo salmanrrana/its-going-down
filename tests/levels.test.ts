@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { DIFFICULTIES, getDifficulty, getLevel, LEVELS } from '../src/game/levels'
+import {
+  DIFFICULTIES,
+  getDifficulty,
+  getLevel,
+  isDifficultyId,
+  isLevelId,
+  LEVELS,
+} from '../src/game/levels'
 import { applySurfaceBounds } from '../src/game/rules'
 import type { DifficultyId, LevelId } from '../src/game/types'
 
@@ -43,6 +50,10 @@ describe('level and difficulty definitions', () => {
     expect(() => getDifficulty('missing' as DifficultyId)).toThrow(
       'Unknown difficulty: missing',
     )
+    expect(isLevelId('surf')).toBe(true)
+    expect(isLevelId('missing')).toBe(false)
+    expect(isDifficultyId('medium')).toBe(true)
+    expect(isDifficultyId('nightmare')).toBe(false)
   })
 })
 
@@ -68,10 +79,25 @@ describe('Easy mode invariants', () => {
     })
   })
 
-  it('does not apply the unlosable wall to other difficulties', () => {
+  it('keeps other difficulties free on the verge but inside the outer boundary', () => {
+    expect(applySurfaceBounds(500, 400, 1000, false)).toEqual({
+      playerX: 500,
+      lateralV: 400,
+      offSurface: false,
+    })
     expect(applySurfaceBounds(1250, 400, 1000, false)).toEqual({
       playerX: 1250,
       lateralV: 400,
+      offSurface: true,
+    })
+    expect(applySurfaceBounds(2000, 400, 1000, false)).toEqual({
+      playerX: 1900,
+      lateralV: -80,
+      offSurface: true,
+    })
+    expect(applySurfaceBounds(-2000, -400, 1000, false)).toEqual({
+      playerX: -1900,
+      lateralV: 80,
       offSurface: true,
     })
   })

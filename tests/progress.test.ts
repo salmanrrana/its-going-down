@@ -1,8 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DIFFICULTIES, LEVELS } from '../src/game/levels'
 import {
   loadProgress,
+  Modal,
   PROGRESS_STORAGE_KEY,
+  resolvePersistenceIssue,
   runKey,
   saveProgress,
   type Progress,
@@ -36,6 +38,21 @@ class MemoryStorage implements Storage {
   }
 }
 
+class FakeElement {
+  className = ''
+  hidden = false
+  innerHTML = ''
+
+  constructor(private card: FakeElement | null = null) {}
+
+  querySelector(selector: string): FakeElement | null {
+    return selector === '[data-role="card"]' ? this.card : null
+  }
+
+  addEventListener(): void {}
+  focus(): void {}
+}
+
 const defaults: Progress = {
   bestScores: {},
   cleared: [],
@@ -47,6 +64,11 @@ const defaults: Progress = {
 describe('progress persistence', () => {
   beforeEach(() => {
     vi.stubGlobal('localStorage', new MemoryStorage())
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
   })
 
   it('creates a unique score key for every level and difficulty', () => {
@@ -69,10 +91,10 @@ describe('progress persistence', () => {
       muted: true,
     }
 
-    saveProgress(progress)
+    expect(saveProgress(progress)).toEqual({ ok: true })
 
     expect(localStorage.getItem(PROGRESS_STORAGE_KEY)).toBe(JSON.stringify(progress))
-    expect(loadProgress()).toEqual(progress)
+    expect(loadProgress()).toEqual({ progress, issue: null })
   })
 
   it('rejects malformed IDs, score values, score keys, and cleared keys', () => {
@@ -100,25 +122,98 @@ describe('progress persistence', () => {
     )
 
     expect(loadProgress()).toEqual({
-      ...defaults,
-      bestScores: { 'snowboard:easy': 900 },
-      cleared: ['snowboard:easy'],
+      progress: {
+        ...defaults,
+        bestScores: { 'snowboard:easy': 900 },
+        cleared: ['snowboard:easy'],
+      },
+      issue: null,
     })
   })
 
-  it('falls back safely for corrupted or unavailable storage', () => {
-    localStorage.setItem(PROGRESS_STORAGE_KEY, '{bad json')
-    expect(loadProgress()).toEqual(defaults)
+  it.each(['{bad json', ''])('reports malformed stored data %j while falling back safely', (stored) => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    localStorage.setItem(PROGRESS_STORAGE_KEY, stored)
 
+    const result = loadProgress()
+
+    expect(result.progress).toEqual(defaults)
+    expect(result.issue).toMatchObject({ kind: 'malformed-data' })
+    expect(result.issue?.error).toBeInstanceOf(SyntaxError)
+    expect(warn).toHaveBeenCalledWith(
+      '[progress:malformed-data] Saved progress is malformed; using defaults.',
+      expect.objectContaining({
+        storageKey: PROGRESS_STORAGE_KEY,
+        error: result.issue?.error,
+      }),
+    )
+  })
+
+  it('reports unavailable storage separately and returns an explicit save failure', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const loadError = new Error('read blocked')
+    const saveError = new Error('write blocked')
     vi.stubGlobal('localStorage', {
       getItem: () => {
-        throw new Error('blocked')
+        throw loadError
       },
       setItem: () => {
-        throw new Error('blocked')
+        throw saveError
       },
     })
-    expect(loadProgress()).toEqual(defaults)
-    expect(() => saveProgress(defaults)).not.toThrow()
+
+    const loaded = loadProgress()
+    const saved = saveProgress(defaults)
+
+    expect(loaded).toEqual({
+      progress: defaults,
+      issue: expect.objectContaining({
+        kind: 'storage-unavailable',
+        error: loadError,
+      }),
+    })
+    expect(saved).toEqual({
+      ok: false,
+      issue: expect.objectContaining({
+        kind: 'save-failed',
+        error: saveError,
+      }),
+    })
+    if (saved.ok) throw new Error('Expected save failure')
+    expect(resolvePersistenceIssue(saved.issue, { ok: true })).toBeNull()
+    expect(resolvePersistenceIssue(loaded.issue, { ok: true })).toBe(loaded.issue)
+    expect(warn).toHaveBeenCalledTimes(2)
+  })
+
+  it('shows persistence failures as a non-blocking results warning', () => {
+    const card = new FakeElement()
+    const root = new FakeElement(card)
+    vi.stubGlobal('document', { createElement: () => root })
+    const modal = new Modal({
+      onResume: () => {},
+      onRestart: () => {},
+      onQuit: () => {},
+    })
+
+    modal.showResults(
+      {
+        score: 500,
+        coins: 3,
+        hits: 1,
+        bestAir: 0.5,
+        timeSeconds: 30,
+        progress01: 1,
+        completed: true,
+      },
+      'Snowboard',
+      'slope',
+      true,
+      500,
+      'Progress could not be saved on this device.',
+    )
+
+    expect(card.innerHTML).toContain('class="modal__warning"')
+    expect(card.innerHTML).toContain('Progress could not be saved on this device.')
+    expect(root.hidden).toBe(false)
   })
 })

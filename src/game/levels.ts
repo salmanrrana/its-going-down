@@ -388,6 +388,12 @@ export const DIFFICULTIES: DifficultyDef[] = [
   },
 ]
 
+export const isLevelId = (value: unknown): value is LevelId =>
+  LEVELS.some((level) => level.id === value)
+
+export const isDifficultyId = (value: unknown): value is DifficultyId =>
+  DIFFICULTIES.some((difficulty) => difficulty.id === value)
+
 export const getLevel = (id: LevelId): LevelDef => {
   const level = LEVELS.find((l) => l.id === id)
   if (!level) throw new Error(`Unknown level: ${id}`)

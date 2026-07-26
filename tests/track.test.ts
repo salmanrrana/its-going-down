@@ -28,14 +28,13 @@ const GENERATED_RUNS = RUN_FIXTURES.map((fixture) => ({
 
 describe('seeded track generation', () => {
   it('reproduces the same complete track for every run fixture', () => {
-    for (const { level, difficulty, seed } of RUN_FIXTURES) {
-      const first = generateTrack(level, difficulty, seed)
-      const second = generateTrack(level, difficulty, seed)
+    for (const { level, difficulty, seed, track } of GENERATED_RUNS) {
+      const repeated = generateTrack(level, difficulty, seed)
 
       expect(
-        second,
+        repeated,
         `${level.id}/${difficulty.id}/${seed}`,
-      ).toEqual(first)
+      ).toEqual(track)
     }
   })
 
