@@ -31,6 +31,7 @@ class App {
   private hud: Hud
   private modal: Modal
   private touchHints: HTMLElement
+  private touchJumpHint: HTMLElement
 
   private state: AppState = 'menu'
   private game: Game | null = null
@@ -68,10 +69,17 @@ class App {
 
     this.touchHints = document.createElement('div')
     this.touchHints.className = 'touch-hints'
+    this.touchHints.setAttribute('aria-hidden', 'true')
     this.touchHints.innerHTML = `
-      <div class="touch-hints__half">◀</div>
-      <div class="touch-hints__half">▶</div>
+      <div class="touch-hints__steer touch-hints__steer--left">
+        <span class="touch-hints__arrow">‹</span><span>Hold left</span>
+      </div>
+      <div class="touch-hints__jump" data-role="touch-jump">Swipe up to jump</div>
+      <div class="touch-hints__steer touch-hints__steer--right">
+        <span>Hold right</span><span class="touch-hints__arrow">›</span>
+      </div>
     `
+    this.touchJumpHint = this.touchHints.querySelector('[data-role="touch-jump"]') as HTMLElement
     root.appendChild(this.touchHints)
 
     this.hud = new Hud(() => this.pause())
@@ -194,8 +202,9 @@ class App {
     this.resetTiming()
 
     if (this.input.touchSeen || 'ontouchstart' in window) {
+      this.touchJumpHint.hidden = !difficulty.jumpEnabled
       this.touchHints.classList.add('touch-hints--show')
-      this.hintTimer = 2.4
+      this.hintTimer = 2.8
     }
   }
 

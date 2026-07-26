@@ -1,4 +1,11 @@
-import { DIFFICULTIES, isDifficultyId, isLevelId, LEVELS } from '../game/levels'
+import {
+  DIFFICULTIES,
+  getDifficulty,
+  getLevel,
+  isDifficultyId,
+  isLevelId,
+  LEVELS,
+} from '../game/levels'
 import type { DifficultyId, LevelId } from '../game/types'
 import type { HudState, RunStats } from '../game/game'
 
@@ -174,33 +181,35 @@ export class Menu {
     root.className = 'screen screen--menu'
     root.innerHTML = `
       <div class="menu-tools">
-        <button class="icon-btn" data-role="mute" aria-label="Toggle sound">🔊</button>
+        <button class="icon-btn" data-role="mute" aria-label="Mute sound">🔊</button>
       </div>
-      <div class="title-block">
-        <h1 class="title">It's<em>Going Down</em></h1>
-        <p class="subtitle">Seven sports · Seven places · One direction</p>
-      </div>
-      <div class="section">
-        <h2 class="section__label"><span class="section__step">1</span>Pick your ride</h2>
+      <header class="title-block">
+        <p class="title-kicker">World downhill tour</p>
+        <h1 class="title">It's <em>Going Down</em></h1>
+        <p class="subtitle">Seven sports. Seven places. Pick a line and ride.</p>
+      </header>
+      <section class="section section--rides" aria-labelledby="rides-title">
+        <h2 class="section__label" id="rides-title">Pick your ride</h2>
         <div class="level-grid" data-role="levels"></div>
-      </div>
-      <div class="section">
-        <h2 class="section__label"><span class="section__step">2</span>Pick your difficulty</h2>
-        <div class="difficulty-grid" data-role="difficulties"></div>
-      </div>
-      <div class="start-row">
-        <button class="btn btn--primary" data-role="start">▶ Drop In</button>
-        <p class="start-hint" data-role="hint"></p>
+      </section>
+      <div class="menu-launcher">
+        <section class="section section--difficulty" aria-labelledby="difficulty-title">
+          <h2 class="section__label" id="difficulty-title">Choose the challenge</h2>
+          <div class="difficulty-grid" data-role="difficulties"></div>
+        </section>
+        <div class="start-row">
+          <button class="btn btn--primary" data-role="start">Drop in</button>
+          <p class="start-hint" data-role="hint"></p>
+        </div>
       </div>
     `
     this.root = root
 
     const levelGrid = root.querySelector('[data-role="levels"]') as HTMLElement
-    LEVELS.forEach((level, i) => {
+    LEVELS.forEach((level) => {
       const btn = document.createElement('button')
       btn.className = 'card'
       btn.type = 'button'
-      btn.style.setProperty('--delay', `${i * 0.045}s`)
       btn.style.setProperty('--card-accent', level.palette.accent)
       btn.setAttribute('aria-pressed', 'false')
       btn.innerHTML = `
@@ -263,10 +272,11 @@ export class Menu {
     this.muteBtn.textContent = progress.muted ? '🔇' : '🔊'
     this.muteBtn.setAttribute(
       'aria-label',
-      progress.muted ? 'Unmute sound' : 'Mute sound',
+      progress.muted ? 'Turn sound on' : 'Turn sound off',
     )
+    this.startBtn.textContent = `Drop into ${getLevel(level).name}`
 
-    const jump = difficulty === 'easy' ? '' : touch
+    const jump = !getDifficulty(difficulty).jumpEnabled ? '' : touch
       ? ' Swipe up or tap with a second finger to jump.'
       : ' Press <kbd>Space</kbd> to jump.'
     this.hint.innerHTML = touch
@@ -278,6 +288,21 @@ export class Menu {
     this.startBtn.focus()
   }
 }
+
+const COMBO_KEYFRAMES: Keyframe[] = [
+  { opacity: 0, transform: 'translate3d(-50%, 12px, 0) scale(.82)' },
+  { opacity: 1, transform: 'translate3d(-50%, 0, 0) scale(1)', offset: 0.28 },
+  { opacity: 0, transform: 'translate3d(-50%, -30px, 0) scale(.96)' },
+]
+
+const COUNTDOWN_KEYFRAMES: Keyframe[] = [
+  { opacity: 0, transform: 'scale(1.35)' },
+  { opacity: 1, transform: 'scale(1)', offset: 0.2 },
+  { opacity: 1, transform: 'scale(.94)', offset: 0.72 },
+  { opacity: 0, transform: 'scale(.88)' },
+]
+
+const POP_EASING = 'cubic-bezier(.16, 1, .3, 1)'
 
 export class Hud {
   readonly root: HTMLElement
@@ -293,36 +318,44 @@ export class Hud {
   private countdownNum: HTMLElement
   private lastCombo = 0
   private lastCountdown: number | null = null
+  private lastLives = -1
+  private lastMaxLives = -1
+  private comboAnimation: Animation
+  private countdownAnimation: Animation
+  private readonly reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
 
   constructor(onPause: () => void) {
     const root = document.createElement('div')
     root.className = 'hud'
     root.hidden = true
     root.innerHTML = `
-      <div class="hud__top">
-        <div class="hud__panel">
-          <span class="hud__label">Score</span>
-          <span class="hud__value" data-role="score">0</span>
+      <div class="hud__top" aria-label="Run status">
+        <div class="hud__scoreboard">
+          <div class="hud__panel hud__panel--score">
+            <span class="hud__label">Score</span>
+            <span class="hud__value" data-role="score">0</span>
+          </div>
+          <div class="hud__panel">
+            <span class="hud__label">Coins</span>
+            <span class="hud__value hud__value--sm" data-role="coins">0</span>
+          </div>
+          <div class="hud__panel">
+            <span class="hud__label">Speed</span>
+            <span class="hud__value" data-role="speed">0</span>
+            <span class="hud__unit">km/h</span>
+          </div>
+          <div class="hud__lives" data-role="lives" aria-label="Lives"></div>
         </div>
-        <div class="hud__panel">
-          <span class="hud__label">Coins</span>
-          <span class="hud__value hud__value--sm" data-role="coins">0</span>
-          <span class="hud__lives" data-role="lives"></span>
+        <div class="hud__progress">
+          <div class="progress" aria-hidden="true"><div class="progress__fill" data-role="fill"></div></div>
+          <div class="progress__meta">
+            <span data-role="progress-label">Start</span>
+            <time data-role="time">0:00</time>
+          </div>
         </div>
-        <div class="hud__panel">
-          <span class="hud__label">Speed</span>
-          <span class="hud__value" data-role="speed">0</span>
-        </div>
-        <button class="hud__pause" data-role="pause" aria-label="Pause">❚❚</button>
+        <button class="icon-btn hud__pause" data-role="pause" aria-label="Pause run"><span aria-hidden="true">Ⅱ</span></button>
       </div>
-      <div class="hud__bottom">
-        <div class="progress"><div class="progress__fill" data-role="fill"></div></div>
-        <div class="progress__meta">
-          <span data-role="progress-label">Start</span>
-          <span data-role="time">0:00</span>
-        </div>
-      </div>
-      <div class="combo" data-role="combo"></div>
+      <output class="combo" data-role="combo" aria-live="polite"></output>
     `
     this.root = root
     this.scoreEl = root.querySelector('[data-role="score"]') as HTMLElement
@@ -341,9 +374,27 @@ export class Hud {
     const countdown = document.createElement('div')
     countdown.className = 'countdown'
     countdown.hidden = true
-    countdown.innerHTML = `<div class="countdown__num" data-role="num">3</div>`
+    countdown.setAttribute('role', 'status')
+    countdown.setAttribute('aria-live', 'assertive')
+    countdown.innerHTML = `
+      <div class="countdown__plaque">
+        <span class="countdown__cue">Get ready</span>
+        <span class="countdown__num" data-role="num">3</span>
+      </div>
+    `
     this.countdownEl = countdown
     this.countdownNum = countdown.querySelector('[data-role="num"]') as HTMLElement
+    const motionDuration = this.reduceMotion.matches ? 1 : undefined
+    this.comboAnimation = this.comboEl.animate(COMBO_KEYFRAMES, {
+      duration: motionDuration ?? 650,
+      easing: POP_EASING,
+    })
+    this.countdownAnimation = this.countdownNum.animate(COUNTDOWN_KEYFRAMES, {
+      duration: motionDuration ?? 900,
+      easing: POP_EASING,
+    })
+    this.comboAnimation.cancel()
+    this.countdownAnimation.cancel()
   }
 
   get countdownRoot(): HTMLElement {
@@ -364,44 +415,47 @@ export class Hud {
     this.coinsEl.textContent = `🪙 ${hud.coins}`
     this.speedEl.textContent = String(hud.speedKph)
     this.timeEl.textContent = formatTime(hud.timeSeconds)
-    this.progressFill.style.width = `${(hud.progress01 * 100).toFixed(1)}%`
+    this.progressFill.style.transform = `scaleX(${hud.progress01.toFixed(3)})`
     this.progressLabel.textContent =
       hud.progress01 > 0.985 ? 'Finish!' : `${Math.floor(hud.progress01 * 100)}% down`
 
-    if (hud.maxLives > 0) {
-      const wanted = hud.maxLives
-      if (this.livesEl.childElementCount !== wanted) {
-        this.livesEl.innerHTML = Array.from(
-          { length: wanted },
-          () => `<span class="hud__life">❤️</span>`,
-        ).join('')
+    if (hud.lives !== this.lastLives || hud.maxLives !== this.lastMaxLives) {
+      this.lastLives = hud.lives
+      this.lastMaxLives = hud.maxLives
+      if (hud.maxLives > 0) {
+        if (this.livesEl.childElementCount !== hud.maxLives) {
+          this.livesEl.innerHTML = Array.from(
+            { length: hud.maxLives },
+            () => `<span class="hud__life">❤️</span>`,
+          ).join('')
+        }
+        this.livesEl.setAttribute('aria-label', `${hud.lives} of ${hud.maxLives} lives left`)
+        this.livesEl.childNodes.forEach((node, i) => {
+          ;(node as HTMLElement).classList.toggle('hud__life--lost', i >= hud.lives)
+        })
+      } else {
+        this.livesEl.replaceChildren()
+        this.livesEl.removeAttribute('aria-label')
       }
-      this.livesEl.childNodes.forEach((node, i) => {
-        ;(node as HTMLElement).classList.toggle('hud__life--lost', i >= hud.lives)
-      })
-    } else if (this.livesEl.childElementCount !== 0) {
-      this.livesEl.innerHTML = ''
     }
 
     if (hud.combo > 1 && hud.combo !== this.lastCombo) {
-      this.comboEl.textContent = `${hud.combo}× COMBO`
-      this.comboEl.classList.remove('combo--pop')
-      // Force reflow so the animation restarts on every new combo tier.
-      void this.comboEl.offsetWidth
-      this.comboEl.classList.add('combo--pop')
+      this.comboEl.textContent = `${hud.combo}× combo`
+      this.comboAnimation.cancel()
+      this.comboAnimation.play()
     }
     this.lastCombo = hud.combo
 
     if (hud.countdown !== this.lastCountdown) {
       this.lastCountdown = hud.countdown
       if (hud.countdown === null || hud.countdown <= 0) {
+        this.countdownAnimation.cancel()
         this.countdownEl.hidden = true
       } else {
         this.countdownEl.hidden = false
         this.countdownNum.textContent = String(hud.countdown)
-        this.countdownNum.style.animation = 'none'
-        void this.countdownNum.offsetWidth
-        this.countdownNum.style.animation = ''
+        this.countdownAnimation.cancel()
+        this.countdownAnimation.play()
       }
     }
   }
@@ -416,24 +470,32 @@ export interface ModalCallbacks {
 export class Modal {
   readonly root: HTMLElement
   private card: HTMLElement
+  private previousFocus: HTMLElement | null = null
 
   constructor(private callbacks: ModalCallbacks) {
     const root = document.createElement('div')
     root.className = 'modal'
     root.hidden = true
+    root.setAttribute('role', 'dialog')
+    root.setAttribute('aria-modal', 'true')
+    root.setAttribute('aria-labelledby', 'modal-title')
     root.innerHTML = `<div class="modal__card" data-role="card"></div>`
     this.root = root
     this.card = root.querySelector('[data-role="card"]') as HTMLElement
+    root.addEventListener('keydown', this.onKeyDown)
   }
 
   hide(): void {
     this.root.hidden = true
+    this.previousFocus?.focus()
+    this.previousFocus = null
   }
 
   showPause(levelName: string, location: string): void {
+    this.previousFocus = (document.activeElement as HTMLElement | null) ?? null
     this.card.innerHTML = `
       <p class="modal__eyebrow">Paused</p>
-      <h2 class="modal__title">${levelName}</h2>
+      <h2 id="modal-title" class="modal__title">${levelName}</h2>
       <p class="modal__sub">${location}</p>
       <div class="modal__actions">
         <button class="btn btn--primary" data-role="resume">▶ Keep Going</button>
@@ -441,8 +503,8 @@ export class Modal {
         <button class="btn btn--ghost" data-role="quit">✕ Change Level</button>
       </div>
     `
-    this.wire()
     this.root.hidden = false
+    this.wire()
   }
 
   showResults(
@@ -453,10 +515,11 @@ export class Modal {
     best: number,
     persistenceWarning: string | null = null,
   ): void {
+    this.previousFocus = (document.activeElement as HTMLElement | null) ?? null
     const won = stats.completed
     this.card.innerHTML = `
       <p class="modal__eyebrow">${won ? 'Run complete' : 'Run over'}</p>
-      <h2 class="modal__title ${won ? 'modal__title--win' : 'modal__title--lose'}">
+      <h2 id="modal-title" class="modal__title ${won ? 'modal__title--win' : 'modal__title--lose'}">
         ${won ? 'You made it!' : 'Wipeout!'}
       </h2>
       <p class="modal__sub">
@@ -504,8 +567,23 @@ export class Modal {
         <button class="btn btn--ghost" data-role="quit">✕ Change Level</button>
       </div>
     `
-    this.wire()
     this.root.hidden = false
+    this.wire()
+  }
+
+  private onKeyDown = (event: KeyboardEvent): void => {
+    if (event.key !== 'Tab') return
+    const controls = [...this.card.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')]
+    if (controls.length === 0) return
+    const first = controls[0]
+    const last = controls[controls.length - 1]
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault()
+      last.focus()
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault()
+      first.focus()
+    }
   }
 
   private wire(): void {

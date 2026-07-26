@@ -50,6 +50,7 @@ class FakeElement {
   }
 
   addEventListener(): void {}
+  setAttribute(): void {}
   focus(): void {}
 }
 
