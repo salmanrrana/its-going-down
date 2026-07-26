@@ -66,6 +66,35 @@ body {
   touch-action: none;
 }
 
+.renderer-status,
+.renderer-metrics {
+  position: absolute;
+  z-index: 30;
+  left: calc(var(--safe-l) + 12px);
+  max-width: min(34rem, calc(100vw - 24px));
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.36);
+  border-radius: 10px;
+  background: rgba(8, 19, 31, 0.86);
+  color: #f5fbff;
+  font: 700 0.72rem/1.35 ui-monospace, SFMono-Regular, Consolas, monospace;
+  pointer-events: none;
+}
+
+.renderer-status {
+  top: calc(var(--safe-t) + 12px);
+}
+
+.renderer-status--error {
+  border-color: rgba(255, 187, 94, 0.82);
+  background: rgba(61, 30, 12, 0.9);
+}
+
+.renderer-metrics {
+  bottom: calc(var(--safe-b) + 12px);
+  color: #dff6ff;
+}
+
 /* --- Screen scaffolding -------------------------------------------------- */
 .screen {
   position: absolute;

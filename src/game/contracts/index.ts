@@ -90,4 +90,5 @@ export interface GameView {
   update(dt: number): void
   render(previous: GameSnapshot, current: GameSnapshot, alpha: number): void
   handleEffect(effect: SprayEffect): void
+  dispose(): void
 }
