@@ -219,7 +219,9 @@ export function generateTrack(
     const startX = (rng() * 2 - 1) * 0.6
     const endX = (rng() * 2 - 1) * 0.6
     for (let j = 0; j < runLength; j++) {
-      const idx = i + j * 2
+      // Five segments apart: any tighter and a run reads as one smeared ribbon
+      // rather than a line of individual coins to chase.
+      const idx = i + j * 5
       if (idx >= count) break
       const seg = segments[idx]
       if (seg.obstacles.length > 0) continue

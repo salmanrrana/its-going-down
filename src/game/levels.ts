@@ -28,14 +28,15 @@ export const LEVELS: LevelDef[] = [
       sunGlow: 'rgba(255,240,200,0.55)',
       ridgeFar: '#5f7fae',
       ridgeNear: '#3d5a86',
-      // The verges are deliberately much bluer than the piste: on a white-on-
-      // white mountain the run has to stay obvious to a five-year-old.
-      groundA: '#9dc3e6',
-      groundB: '#93bade',
+      // The verges stay bluer than the piste so the run reads to a five-year-old,
+      // but only just: a real mountain is white on white, and the grooming plus
+      // the shoulder shadow carry most of the legibility.
+      groundA: '#c4daf0',
+      groundB: '#bed5ec',
       laneA: '#ffffff',
-      laneB: '#f4f9ff',
-      rumbleA: '#3f7fc4',
-      rumbleB: '#e8f3ff',
+      laneB: '#fafcff',
+      rumbleA: '#a7c6e4',
+      rumbleB: '#b0cde9',
       centerLine: null,
       fog: '#bcd8f2',
       accent: '#5ec8ff',

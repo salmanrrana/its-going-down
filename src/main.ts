@@ -5,8 +5,8 @@ import { Input } from './core/input'
 import type { GameEvent, GameView, InputFrame } from './game/contracts'
 import { Game, type RunStats } from './game/game'
 import { getDifficulty, getLevel } from './game/levels'
+import { Renderer } from './game/renderer'
 import { resolveRunSelection, RunFixtureError } from './game/run-fixture'
-import { ThreeGameView } from './rendering/three'
 import type { DifficultyId, LevelId } from './game/types'
 import {
   Hud,
@@ -44,7 +44,6 @@ class App {
   private lastFrame = 0
   private rafId = 0
   private hintTimer = 0
-  private rendererAvailable = true
   private tickInput = new TickInputBuffer()
 
   constructor(root: HTMLElement) {
@@ -63,9 +62,7 @@ class App {
     this.canvas = document.createElement('canvas')
     this.canvas.id = 'game-canvas'
     root.appendChild(this.canvas)
-    this.renderer = new ThreeGameView(this.canvas, {
-      onAvailabilityChange: this.onRendererAvailabilityChange,
-    })
+    this.renderer = new Renderer(this.canvas)
 
     this.touchHints = document.createElement('div')
     this.touchHints.className = 'touch-hints'
@@ -156,12 +153,6 @@ class App {
     }
   }
 
-  private onRendererAvailabilityChange = (available: boolean): void => {
-    this.rendererAvailable = available
-    this.resetTiming()
-    if (!available && this.state === 'playing' && !this.modalOpen) this.pause()
-  }
-
   private persistProgress(): void {
     this.persistenceIssue = resolvePersistenceIssue(
       this.persistenceIssue,
@@ -179,7 +170,6 @@ class App {
   }
 
   private startRun(): void {
-    if (!this.rendererAvailable) return
     audio.unlock()
     audio.setMuted(this.progress.muted)
     this.progress.lastLevel = this.level
@@ -226,7 +216,7 @@ class App {
   }
 
   private resume(): void {
-    if (!this.game || !this.modalOpen || !this.rendererAvailable) return
+    if (!this.game || !this.modalOpen) return
     this.modal.hide()
     this.tickInput.clear()
     this.input.clear()

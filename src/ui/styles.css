@@ -70,49 +70,6 @@ button:focus-visible {
   touch-action: none;
 }
 
-/* Renderer notices stay readable without looking like a developer console. */
-.renderer-status,
-.renderer-metrics {
-  position: absolute;
-  z-index: 30;
-  left: 50%;
-  max-width: min(34rem, calc(100vw - var(--safe-l) - var(--safe-r) - 24px));
-  padding: 9px 13px;
-  border-radius: var(--radius-sm);
-  background: rgba(247, 251, 255, 0.96);
-  color: var(--ink);
-  box-shadow: var(--shadow-small);
-  font: 800 0.76rem/1.35 var(--font-ui);
-  text-align: center;
-  pointer-events: none;
-  transform: translateX(-50%);
-}
-
-.renderer-status {
-  top: calc(var(--safe-t) + 12px);
-}
-
-.renderer-status::before {
-  content: '3D course · ';
-  color: var(--pine);
-}
-
-.renderer-status--error {
-  background: #fff1db;
-  color: #6d2b20;
-}
-
-.renderer-status--error::before {
-  content: 'Graphics stopped · ';
-  color: var(--danger);
-}
-
-.renderer-metrics {
-  top: auto;
-  bottom: calc(var(--safe-b) + 12px);
-  font-variant-numeric: tabular-nums;
-}
-
 .screen {
   position: absolute;
   inset: 0;

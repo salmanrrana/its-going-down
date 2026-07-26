@@ -9,17 +9,12 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
-    "test": "vitest run && npm run test:compiler",
-    "test:compiler": "node --test --test-concurrency=1 tests/track-compiler.test.mjs",
+    "test": "vitest run",
     "test:watch": "vitest"
   },
   "devDependencies": {
-    "@types/three": "0.185.1",
     "typescript": "^5.6.3",
     "vite": "^5.4.10",
     "vitest": "^3.2.7"
-  },
-  "dependencies": {
-    "three": "0.185.1"
   }
 }
