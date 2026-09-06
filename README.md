@@ -4,19 +4,19 @@ A downhill arcade game for kids. Seven sports, seven places around the world,
 one direction: **down**.
 
 Pick a ride, pick a difficulty, and go. The whole game is one screen away —
-the home screen *is* the level select.
+the home screen _is_ the level select.
 
 ## The rides
 
-| Level | Sport | Where |
-| --- | --- | --- |
-| 1 | Snowboard | Niseko, Japan |
-| 2 | Skateboard | San Francisco, USA |
-| 3 | Rollerblades | Barcelona, Spain |
-| 4 | Go-Kart | Monza, Italy |
-| 5 | Speedboat | Amazon River, Brazil |
-| 6 | Surfboard | Nazaré, Portugal |
-| 7 | Rally Car | Atlas Mountains, Morocco |
+| Level | Sport        | Where                    |
+| ----- | ------------ | ------------------------ |
+| 1     | Snowboard    | Niseko, Japan            |
+| 2     | Skateboard   | San Francisco, USA       |
+| 3     | Rollerblades | Barcelona, Spain         |
+| 4     | Go-Kart      | Monza, Italy             |
+| 5     | Speedboat    | Amazon River, Brazil     |
+| 6     | Surfboard    | Nazaré, Portugal         |
+| 7     | Rally Car    | Atlas Mountains, Morocco |
 
 Each one handles differently on purpose. The kart is twitchy and grippy, the
 boat slides and drifts, the surfboard rides the sway of the wave.
@@ -39,11 +39,11 @@ Deliberately tiny. Two things to learn, and on Easy only one of them.
 
 ## Difficulty
 
-| Mode | What changes |
-| --- | --- |
-| **Easy** | Steering only — no jump button to worry about. You cannot fall off the run and you cannot lose. Built for 5-and-under. |
-| **Medium** | Faster, more obstacles, jump unlocked, three lives. |
-| **Hard** | Full speed, packed course, two lives, no steering assist. |
+| Mode       | What changes                                                                                                           |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------- |
+| **Easy**   | Steering only — no jump button to worry about. You cannot fall off the run and you cannot lose. Built for 5-and-under. |
+| **Medium** | Faster, more obstacles, jump unlocked, three lives.                                                                    |
+| **Hard**   | Full speed, packed course, two lives, no steering assist.                                                              |
 
 Easy mode is genuinely unlosable: the edges of the run are soft walls, there are
 no lives, and a gentle auto-assist steers away from obstacles. A small child can
@@ -65,9 +65,15 @@ npm run dev      # http://localhost:5173
 ```bash
 npm run typecheck
 npm test         # deterministic behavior suite
+npm run check:fast # lint, types, and deterministic tests
 npm run build    # typecheck + production build into dist/
 npm run preview  # serve the production build locally
 ```
+
+`npm install` configures an executable pre-commit hook. It checks an isolated
+snapshot of staged code and configuration with Oxlint and Prettier, then runs
+the project typecheck and tests for changes that can affect them. Source
+deletions are included, and unstaged edits are left alone.
 
 For browser automation and repeatable debugging, provide a complete run fixture in
 its query string, then press **Drop In**:
