@@ -21,3 +21,6 @@ plans/ralph*.sh
 .claude/worktrees/
 .ralph-prompt.md
 .ralph-services.json
+
+# Local visual review evidence; selected previews live in docs/.
+.impeccable/review/

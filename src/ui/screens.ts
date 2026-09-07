@@ -1,3 +1,4 @@
+import { icon } from './icons'
 import {
   DIFFICULTIES,
   getDifficulty,
@@ -42,8 +43,7 @@ export interface LoadProgressResult {
 }
 
 export type SaveProgressResult =
-  | { ok: true }
-  | { ok: false; issue: ProgressPersistenceIssue }
+  { ok: true } | { ok: false; issue: ProgressPersistenceIssue }
 
 export function resolvePersistenceIssue(
   current: ProgressPersistenceIssue | null,
@@ -122,16 +122,23 @@ export function loadProgress(): LoadProgressResult {
   }
 
   const cleared = Array.isArray(stored.cleared)
-    ? [...new Set(stored.cleared.filter(
-      (key): key is string => typeof key === 'string' && VALID_RUN_KEYS.has(key),
-    ))]
+    ? [
+        ...new Set(
+          stored.cleared.filter(
+            (key): key is string =>
+              typeof key === 'string' && VALID_RUN_KEYS.has(key),
+          ),
+        ),
+      ]
     : []
 
   return {
     progress: {
       bestScores,
       cleared,
-      lastLevel: isLevelId(stored.lastLevel) ? stored.lastLevel : fallback.lastLevel,
+      lastLevel: isLevelId(stored.lastLevel)
+        ? stored.lastLevel
+        : fallback.lastLevel,
       lastDifficulty: isDifficultyId(stored.lastDifficulty)
         ? stored.lastDifficulty
         : fallback.lastDifficulty,
@@ -181,21 +188,22 @@ export class Menu {
     root.className = 'screen screen--menu'
     root.innerHTML = `
       <div class="menu-tools">
-        <button class="icon-btn" data-role="mute" aria-label="Mute sound">🔊</button>
+        <button class="icon-btn" data-role="mute" aria-label="Mute sound">${icon('sound')}</button>
       </div>
       <header class="title-block">
-        <p class="title-kicker">World downhill tour</p>
-        <h1 class="title">It's <em>Going Down</em></h1>
-        <p class="subtitle">Seven sports. Seven places. Pick a line and ride.</p>
+        <h1 class="title"><span>It's</span> Going <em>Down!</em></h1>
+        <p class="subtitle">Big hills. Little worries.</p>
       </header>
+      <div class="tour-stop" aria-live="polite"><span data-role="destination"></span><strong data-role="sport"></strong><span data-role="tagline"></span></div>
       <section class="section section--rides" aria-labelledby="rides-title">
         <h2 class="section__label" id="rides-title">Pick your ride</h2>
         <div class="level-grid" data-role="levels"></div>
       </section>
       <div class="menu-launcher">
         <section class="section section--difficulty" aria-labelledby="difficulty-title">
-          <h2 class="section__label" id="difficulty-title">Choose the challenge</h2>
+          <h2 class="section__label" id="difficulty-title">Make it your speed</h2>
           <div class="difficulty-grid" data-role="difficulties"></div>
+          <p class="difficulty-hint" data-role="difficulty-hint"></p>
         </section>
         <div class="start-row">
           <button class="btn btn--primary" data-role="start">Drop in</button>
@@ -213,36 +221,41 @@ export class Menu {
       btn.style.setProperty('--card-accent', level.palette.accent)
       btn.setAttribute('aria-pressed', 'false')
       btn.innerHTML = `
-        <span class="card__glyph">${level.glyph}</span>
+        <span class="card__glyph">${icon(level.id)}</span>
         <span class="card__name">${level.name}</span>
-        <span class="card__location">${level.flag} ${level.location}</span>
-        <span class="card__tagline">${level.tagline}</span>
+        <span class="card__location">${level.location}</span>
         <span class="card__badge" data-role="best" hidden></span>
       `
-      btn.addEventListener('click', () => this.callbacks.onSelectLevel(level.id))
+      btn.addEventListener('click', () =>
+        this.callbacks.onSelectLevel(level.id),
+      )
       this.levelButtons.set(level.id, btn)
       levelGrid.appendChild(btn)
     })
 
-    const diffGrid = root.querySelector('[data-role="difficulties"]') as HTMLElement
+    const diffGrid = root.querySelector(
+      '[data-role="difficulties"]',
+    ) as HTMLElement
     DIFFICULTIES.forEach((diff) => {
       const btn = document.createElement('button')
       btn.className = 'diff'
       btn.type = 'button'
       btn.setAttribute('aria-pressed', 'false')
       btn.innerHTML = `
-        <span class="diff__glyph">${diff.glyph}</span>
         <span>
           <span class="diff__name">${diff.name}</span>
-          <span class="diff__blurb">${diff.blurb}</span>
         </span>
       `
-      btn.addEventListener('click', () => this.callbacks.onSelectDifficulty(diff.id))
+      btn.addEventListener('click', () =>
+        this.callbacks.onSelectDifficulty(diff.id),
+      )
       this.diffButtons.set(diff.id, btn)
       diffGrid.appendChild(btn)
     })
 
-    this.startBtn = root.querySelector('[data-role="start"]') as HTMLButtonElement
+    this.startBtn = root.querySelector(
+      '[data-role="start"]',
+    ) as HTMLButtonElement
     this.startBtn.addEventListener('click', () => this.callbacks.onStart())
     this.hint = root.querySelector('[data-role="hint"]') as HTMLElement
     this.muteBtn = root.querySelector('[data-role="mute"]') as HTMLButtonElement
@@ -269,16 +282,36 @@ export class Menu {
     for (const [id, btn] of this.diffButtons) {
       btn.setAttribute('aria-pressed', String(id === difficulty))
     }
-    this.muteBtn.textContent = progress.muted ? '🔇' : '🔊'
+    this.muteBtn.innerHTML = icon(progress.muted ? 'mute' : 'sound')
     this.muteBtn.setAttribute(
       'aria-label',
       progress.muted ? 'Turn sound on' : 'Turn sound off',
     )
-    this.startBtn.textContent = `Drop into ${getLevel(level).name}`
+    this.startBtn.textContent = 'Drop in'
+    this.startBtn.setAttribute(
+      'aria-label',
+      `Drop into ${getLevel(level).name}`,
+    )
+    const selected = getLevel(level)
+    const text = (role: string, value: string): void => {
+      const element = this.root.querySelector(`[data-role="${role}"]`)
+      if (element) element.textContent = value
+    }
+    text('destination', selected.location)
+    text('sport', selected.name)
+    text('tagline', selected.tagline)
+    text(
+      'difficulty-hint',
+      difficulty === 'easy'
+        ? 'Just steer. You can’t lose.'
+        : getDifficulty(difficulty).blurb,
+    )
 
-    const jump = !getDifficulty(difficulty).jumpEnabled ? '' : touch
-      ? ' Swipe up or tap with a second finger to jump.'
-      : ' Press <kbd>Space</kbd> to jump.'
+    const jump = !getDifficulty(difficulty).jumpEnabled
+      ? ''
+      : touch
+        ? ' Swipe up or tap with a second finger to jump.'
+        : ' Press <kbd>Space</kbd> to jump.'
     this.hint.innerHTML = touch
       ? `Hold the left or right side of the screen to steer.${jump}`
       : `Steer with <kbd>←</kbd> <kbd>→</kbd> or <kbd>A</kbd> <kbd>D</kbd>.${jump}`
@@ -322,7 +355,9 @@ export class Hud {
   private lastMaxLives = -1
   private comboAnimation: Animation
   private countdownAnimation: Animation
-  private readonly reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
+  private readonly reduceMotion = window.matchMedia(
+    '(prefers-reduced-motion: reduce)',
+  )
 
   constructor(onPause: () => void) {
     const root = document.createElement('div')
@@ -353,7 +388,7 @@ export class Hud {
             <time data-role="time">0:00</time>
           </div>
         </div>
-        <button class="icon-btn hud__pause" data-role="pause" aria-label="Pause run"><span aria-hidden="true">Ⅱ</span></button>
+        <button class="icon-btn hud__pause" data-role="pause" aria-label="Pause run">${icon('pause')}</button>
       </div>
       <output class="combo" data-role="combo" aria-live="polite"></output>
     `
@@ -364,12 +399,13 @@ export class Hud {
     this.timeEl = root.querySelector('[data-role="time"]') as HTMLElement
     this.livesEl = root.querySelector('[data-role="lives"]') as HTMLElement
     this.progressFill = root.querySelector('[data-role="fill"]') as HTMLElement
-    this.progressLabel = root.querySelector('[data-role="progress-label"]') as HTMLElement
+    this.progressLabel = root.querySelector(
+      '[data-role="progress-label"]',
+    ) as HTMLElement
     this.comboEl = root.querySelector('[data-role="combo"]') as HTMLElement
-    ;(root.querySelector('[data-role="pause"]') as HTMLButtonElement).addEventListener(
-      'click',
-      onPause,
-    )
+    ;(
+      root.querySelector('[data-role="pause"]') as HTMLButtonElement
+    ).addEventListener('click', onPause)
 
     const countdown = document.createElement('div')
     countdown.className = 'countdown'
@@ -383,7 +419,9 @@ export class Hud {
       </div>
     `
     this.countdownEl = countdown
-    this.countdownNum = countdown.querySelector('[data-role="num"]') as HTMLElement
+    this.countdownNum = countdown.querySelector(
+      '[data-role="num"]',
+    ) as HTMLElement
     const motionDuration = this.reduceMotion.matches ? 1 : undefined
     this.comboAnimation = this.comboEl.animate(COMBO_KEYFRAMES, {
       duration: motionDuration ?? 650,
@@ -412,12 +450,14 @@ export class Hud {
 
   update(hud: HudState): void {
     this.scoreEl.textContent = hud.score.toLocaleString()
-    this.coinsEl.textContent = `🪙 ${hud.coins}`
+    this.coinsEl.textContent = String(hud.coins)
     this.speedEl.textContent = String(hud.speedKph)
     this.timeEl.textContent = formatTime(hud.timeSeconds)
     this.progressFill.style.transform = `scaleX(${hud.progress01.toFixed(3)})`
     this.progressLabel.textContent =
-      hud.progress01 > 0.985 ? 'Finish!' : `${Math.floor(hud.progress01 * 100)}% down`
+      hud.progress01 > 0.985
+        ? 'Finish!'
+        : `${Math.floor(hud.progress01 * 100)}% down`
 
     if (hud.lives !== this.lastLives || hud.maxLives !== this.lastMaxLives) {
       this.lastLives = hud.lives
@@ -426,12 +466,18 @@ export class Hud {
         if (this.livesEl.childElementCount !== hud.maxLives) {
           this.livesEl.innerHTML = Array.from(
             { length: hud.maxLives },
-            () => `<span class="hud__life">❤️</span>`,
+            () => `<span class="hud__life">${icon('heart')}</span>`,
           ).join('')
         }
-        this.livesEl.setAttribute('aria-label', `${hud.lives} of ${hud.maxLives} lives left`)
+        this.livesEl.setAttribute(
+          'aria-label',
+          `${hud.lives} of ${hud.maxLives} lives left`,
+        )
         this.livesEl.childNodes.forEach((node, i) => {
-          ;(node as HTMLElement).classList.toggle('hud__life--lost', i >= hud.lives)
+          ;(node as HTMLElement).classList.toggle(
+            'hud__life--lost',
+            i >= hud.lives,
+          )
         })
       } else {
         this.livesEl.replaceChildren()
@@ -494,13 +540,12 @@ export class Modal {
   showPause(levelName: string, location: string): void {
     this.previousFocus = (document.activeElement as HTMLElement | null) ?? null
     this.card.innerHTML = `
-      <p class="modal__eyebrow">Paused</p>
-      <h2 id="modal-title" class="modal__title">${levelName}</h2>
-      <p class="modal__sub">${location}</p>
+      <h2 id="modal-title" class="modal__title">Paused</h2>
+      <p class="modal__sub">${levelName} · ${location}</p>
       <div class="modal__actions">
-        <button class="btn btn--primary" data-role="resume">▶ Keep Going</button>
-        <button class="btn btn--ghost" data-role="restart">↻ Restart Run</button>
-        <button class="btn btn--ghost" data-role="quit">✕ Change Level</button>
+        <button class="btn btn--primary" data-role="resume">Keep going</button>
+        <button class="btn btn--ghost" data-role="restart">Restart run</button>
+        <button class="btn btn--ghost" data-role="quit">Change ride</button>
       </div>
     `
     this.root.hidden = false
@@ -518,7 +563,6 @@ export class Modal {
     this.previousFocus = (document.activeElement as HTMLElement | null) ?? null
     const won = stats.completed
     this.card.innerHTML = `
-      <p class="modal__eyebrow">${won ? 'Run complete' : 'Run over'}</p>
       <h2 id="modal-title" class="modal__title ${won ? 'modal__title--win' : 'modal__title--lose'}">
         ${won ? 'You made it!' : 'Wipeout!'}
       </h2>
@@ -531,7 +575,7 @@ export class Modal {
       </p>
       <div class="stats">
         <div class="stat stat--wide">
-          <div class="stat__label">${isBest ? '★ New best score' : 'Score'}</div>
+          <div class="stat__label">${isBest ? 'New best score' : 'Score'}</div>
           <div class="stat__value ${isBest ? 'stat__value--gold' : ''}">
             ${stats.score.toLocaleString()}
           </div>
@@ -563,8 +607,8 @@ export class Modal {
       </div>
       ${persistenceWarning ? `<p class="modal__warning">${persistenceWarning}</p>` : ''}
       <div class="modal__actions">
-        <button class="btn btn--primary" data-role="restart">↻ Go Again</button>
-        <button class="btn btn--ghost" data-role="quit">✕ Change Level</button>
+        <button class="btn btn--primary" data-role="restart">Go again</button>
+        <button class="btn btn--ghost" data-role="quit">Change ride</button>
       </div>
     `
     this.root.hidden = false
@@ -573,7 +617,9 @@ export class Modal {
 
   private onKeyDown = (event: KeyboardEvent): void => {
     if (event.key !== 'Tab') return
-    const controls = [...this.card.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')]
+    const controls = [
+      ...this.card.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'),
+    ]
     if (controls.length === 0) return
     const first = controls[0]
     const last = controls[controls.length - 1]
@@ -594,6 +640,8 @@ export class Modal {
     const quit = this.card.querySelector('[data-role="quit"]')
     quit?.addEventListener('click', () => this.callbacks.onQuit())
     // Put focus on the primary action so keyboard players can just hit Enter.
-    ;(this.card.querySelector('.btn--primary') as HTMLButtonElement | null)?.focus()
+    ;(
+      this.card.querySelector('.btn--primary') as HTMLButtonElement | null
+    )?.focus()
   }
 }

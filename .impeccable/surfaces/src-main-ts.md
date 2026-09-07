@@ -1,17 +1,47 @@
 ---
 version: 1
-slug: "src-main-ts"
-primary_target: "src/main.ts"
-related_targets: ["src/ui/screens.ts","src/ui/styles.css"]
+slug: src-main-ts
+primary_target: src/main.ts
+related_targets:
+  [
+    src/game/renderer.ts,
+    src/rendering/models.ts,
+    src/ui/screens.ts,
+    src/ui/styles.css,
+  ]
 ---
 
-# Gameplay Surface Brief
+# PS1 downhill game
 
-- **Scope:** Full-viewport gameplay plus menu, HUD, pause, loading, and results integration.
-- **Modes:** Experience for the real-time world; Operate for DOM controls and run-state UI.
-- **Audience and job:** Kids and families choose a sport and difficulty, understand one tiny control vocabulary, read the course ahead, finish or replay a short run, and experience seven distinct places without interface friction.
-- **Primary task:** Steer downhill, jump when enabled, avoid or clear hazards, collect coins, and reach the finish.
-- **Constraints:** Unlosable Easy mode, deterministic fair courses, keyboard/touch accessibility, phone readability, adaptive mobile graphics, no Canvas gameplay fallback, lazy per-environment assets.
-- **Chosen direction:** The Living Downhill Diorama with the approved Cinematic Chase composition—wide third-person camera, lower-third hero, readable course corridor, authored near/mid/far environment masses, coherent light/fog/shadows, and tactile UI at the edges.
-- **Memorable moment:** A hard carve sends a broad world-space surface trail behind the hero while the camera opens onto a recognizable landmark and layered horizon without obscuring the next route choice.
-- **Unresolved:** Exact production typefaces, final GLB asset sources, audio sample library, and final numeric quality thresholds after device profiling.
+Mode: Experience for the world, Operate for the controls.
+
+## Direction contract
+
+FORM: The user explicitly chose a PlayStation-one-inspired browser/phone game,
+replacing the previous visual world. Concept seed dabff623 was run; the pinned
+console direction outranks the unrelated assigned alternatives. This is a code-led
+real-time 3D artifact, with no approved raster comp or raster asset requirement.
+
+OWN-WORLD: Low-poly vertex-painted landscapes, a 720 × 480 maximum framebuffer,
+color dithering, long depth fog, and chunky riders. Menu colors are ink #20283f,
+paper #fff2d6, vermilion #ff6446, and yellow #ffdc75. Bungee lettering reads like
+an arcade game sleeve. Every sport retains its location and handling personality.
+
+FIRST VIEWPORT: The selected sport runs immediately behind the menu. A loud
+three-line title anchors the left; a compact ride selector and a single Drop in
+button frame a readable rider and downhill corridor. All seven rides and the
+primary action fit the 390 × 844 portrait viewport.
+
+INTERACTION: Selecting a ride immediately changes the 3D world and rider. Drop in
+starts the existing countdown and run. Keyboard or screen-side steering remains
+the only required action on Easy, which is unlosable. Medium/Hard retain jumping.
+
+REACH: HUD, countdown, pause, results, mute, focus, and touch hints share the same
+palette. Phone portrait and short landscape layouts preserve the route. Reduced
+motion suppresses camera roll and spray; the game itself continues to move.
+
+## Verification
+
+Screenshots live in .impeccable/review/ (local review evidence, not shipping art).
+Desktop and phone layout checks are browser viewport checks; no physical-device
+performance claim is made. Simulation and rendering geometry are tested separately.
