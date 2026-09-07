@@ -1,87 +1,95 @@
-<!-- SEED: established with the user before implementation; re-run $impeccable document once there's code to capture the actual tokens and components. -->
 ---
 name: It's Going Down
-description: A living downhill diorama where seven distinct worlds turn one simple gesture into cinematic arcade motion.
+description: Seven downhill rides in a chunky PS1-inspired world with crisp arcade controls.
+colors:
+  ink: '#20283f'
+  paper: '#fff2d6'
+  orange: '#ff6446'
+  yellow: '#ffdc75'
+typography:
+  display:
+    fontFamily: 'Bungee, sans-serif'
+    fontSize: 'clamp(3.1rem, 6vw, 5.4rem)'
+    fontWeight: 400
+    lineHeight: 0.99
+  body:
+    fontFamily: "'Trebuchet MS', sans-serif"
+  headline:
+    fontFamily: 'Bungee, sans-serif'
+    fontSize: '2rem'
+    fontWeight: 400
+    lineHeight: 1.1
+rounded:
+  control: '3px'
+  button: '4px'
+  modal: '5px'
+components:
+  button-primary:
+    backgroundColor: '{colors.orange}'
+    textColor: '#1d2335'
+    rounded: '{rounded.button}'
+    padding: '12px 20px'
+  button-primary-hover:
+    backgroundColor: '{colors.yellow}'
+  ride-selected:
+    backgroundColor: '{colors.paper}'
+    textColor: '{colors.ink}'
+    rounded: '{rounded.control}'
 ---
 
 # Design System: It's Going Down
 
 ## Overview
 
-**Creative North Star: "The Living Downhill Diorama"**
+**Creative North Star: "The Arcade Game Sleeve"**
 
-The game feels like entering an exquisitely built animated world at toy scale: bold readable masses, tactile surfaces, authored landmarks, and characters with oversized silhouettes, but with enough spatial depth, light, atmosphere, and motion to feel genuinely immersive. The approved primary gameplay composition is **Cinematic Chase**—a wide third-person camera behind and above the rider that gives the player, upcoming course, nearby hazards, environmental masses, and distant horizon meaningful space in the same frame.
+A playful PS1-inspired downhill world pairs faceted scenery and chunky riders with loud, crisp lettering. Seven sports share the same small control vocabulary while their terrain, landmarks, riders, and motion establish distinct places. This implemented direction replaces the earlier living-diorama seed.
 
-This is not a nostalgia exercise and not a technical 3D demo. Every environment must feel composed, inhabited, and specific to its sport and place. Procedural terrain provides continuity; authored characters, vehicles, vegetation, props, and landmarks provide memory. The menu and HUD operate inside this world without covering it in generic game chrome.
-
-**Key Characteristics:**
-
-- Wide cinematic chase framing with a stable, readable course ahead.
-- Chunky stylized geometry with deliberate silhouette and restrained surface detail.
-- Real spatial depth: terrain, fog, shadows, occlusion, particles, and camera all agree.
-- A distinct topology, landmark grammar, material language, and motion signature for every level.
-- Tactile, playful DOM UI that stays legible without becoming a neon console or glass dashboard.
+The 3D scene is intentionally pixelated; menus and HUD remain full-resolution DOM elements. Source truth lives in `src/ui/styles.css`, `src/ui/screens.ts`, `src/game/renderer.ts`, and `src/rendering/models.ts`; the first-screen contract lives in `.impeccable/surfaces/src-main-ts.md`.
 
 ## Colors
 
-The strategy is a **full environmental palette**: each level owns three or four dominant world colors plus shared high-contrast UI ink, snow/light surfaces, and a warm action color. Color belongs to large scene fields—sky, terrain, architecture, water, vegetation—not scattered decorative accents.
+Orange carries the primary action and progress. Yellow accents the title, coins, countdown, combo feedback, and hover states. Ink and warm paper establish readable controls: unselected rides and difficulties use ink surfaces; selected choices reverse to paper.
 
-Snow establishes the benchmark: luminous white and pale blue terrain, deep alpine greens, atmospheric blue mountains, a saturated cold sky, and a warm rider/action accent. Urban, motor, river, ocean, and desert worlds must derive equally committed palettes from their places rather than recoloring snow.
-
-**The Atmospheric Ladder Rule.** Near objects carry the widest value and saturation range. Distance moves deliberately toward the environment fog color; it never becomes transparent gray clutter.
-
-**The Warm Signal Rule.** Warm color is scarce and purposeful: player readability, primary action, collectibles, and selected state. It must not compete with every prop.
+World palettes belong to their locations: pale snow and blue mountain shadows, warm urban buildings, trackside racing colors, green riverbanks, blue ocean, and desert rock. Keep hazards and the rider distinct from the surrounding terrain.
 
 ## Typography
 
-Typography is bold, rounded, compact, and immediately readable by children. It should feel like lettering on high-quality outdoor equipment, trail signage, and collectible toy packaging—not a futuristic console, editorial magazine, or esports broadcast.
+Bungee is self-hosted from `public/fonts/bungee.ttf` with its bundled SIL Open Font License. It supplies titles, action labels, HUD values, countdown, and results. Trebuchet MS supplies instructions, ride labels, and supporting information.
 
-The exact production family is **to be resolved during implementation** after testing readability, loading cost, and multilingual glyph coverage. Use a strong display face for the title and major results, with a highly legible rounded UI face for controls, counters, and instructions. Numbers must remain stable and clear at speed.
-
-**The One-Glance Rule.** A child must identify the selected sport, difficulty, primary action, score, lives, and progress without reading decorative copy.
+The main title uses three lines, a small opening line, a yellow final line, and a slight counterclockwise tilt. Supporting labels use bold weights and compact sizes; HUD numbers use tabular figures. Preserve the clear difference between display lettering and reading text.
 
 ## Layout
 
-Gameplay is landscape-led even when the viewport is portrait. The 3D world fills the viewport; DOM UI occupies disciplined edge zones and preserves the central course corridor. The player sits in the lower third, the actionable course occupies the middle, and landmarks/mountains establish the upper depth field.
+The world fills the viewport. Desktop menus put the title and launcher on the left, the selected location at upper right, and all seven ride buttons along the bottom. The middle remains open to the rider and course.
 
-The Cinematic Chase camera is wide enough to show steering choices before they become emergencies. Mobile layouts may tighten peripheral scenery and HUD spacing, but may not crop away course readability or enlarge the player until the world disappears. Safe areas, touch targets, and orientation changes are first-class constraints.
+Portrait menus use one column, a four-column ride selector, then difficulty and Drop in. All seven rides and the action fit the reviewed 390 × 844 viewport. Short landscape places the launcher at the right and retains the seven-ride bottom row; 844 × 390 is reviewed. These are browser viewport checks, not physical-device performance measurements.
 
-Menus use the live or authored world as the dominant field. Selection controls are physical, compact, and grouped by task. All seven sports remain visible as a coherent world tour without reducing each location to an interchangeable card grid.
+HUD information occupies the top edge. Portrait moves progress below the scoreboard and pause control. Dialogs center over the world, scroll when necessary, and widen in short landscape; results use two statistic columns normally and four in short landscape. Safe-area offsets protect the main portrait and desktop controls.
 
 ## Elevation & Depth
 
-Depth is structural rather than ornamental. Terrain geometry, perspective, fog, directional sunlight, a cool ambient fill, tight near-field shadows, contact shading, LOD, and world-space effects work as one system. The world should still read with post-processing disabled.
+World depth comes from perspective, angular terrain, a directional light and hemisphere fill on meshes, long depth fog, layered peaks, and simple translucent contact-shadow discs. Vertex-painted meshes use flat shading; a subtle shader dither reduces their color precision. The framebuffer preserves aspect ratio and caps its axes at 720 × 480, with pixelated CSS enlargement and no antialiasing.
 
-Shadows are soft-edged but directional. The player and nearby major props receive the highest shadow fidelity; distant repeated scenery uses simplified or baked grounding. Fog creates scale and composition, not concealment. Full-screen bloom, SSAO, motion blur, and depth of field are not default ingredients.
-
-**The One Sun Rule.** Within a level, every hero, prop, terrain plane, particle highlight, and cast shadow agrees on one dominant light direction.
-
-**The Geometry Before Post Rule.** If the scene does not read through geometry, materials, light, fog, and composition, post-processing may not be used to disguise it.
+UI surfaces are mostly flat. Offset ink text shadows keep display lettering readable over scenery; menu gradients and the tinted modal backdrop separate controls from the course. Controls use short hover lifts rather than decorative surface shadows.
 
 ## Shapes
 
-Forms are rounded where bodies, snow, foliage, water, tires, and protective equipment carry weight; they become faceted where mountains, rock, architecture, ramps, and machinery need planes and direction. Silhouettes are authored before surface detail.
+Riders and props combine boxes, low-sided cylinders and cones, and faceted rocks into recognizable silhouettes. Repeated props are instanced; geometry is authored in source and shares materials. UI controls are compact rectangles with small corner radii, simple solid fills, and clear icon silhouettes.
 
-Characters and vehicles use slightly exaggerated proportions so head, shoulders, board/wheels/hull, steering direction, and airborne state remain readable on phone-sized screens. Repeated props require at least a small family of silhouette variants and deterministic scale/rotation/tint variation.
+## Components
 
-**The Big-Mass Rule.** Prefer three convincing overlapping masses over thirty tiny details. Detail that disappears at gameplay distance does not earn geometry, texture memory, or draw calls.
+- **Primary and secondary actions:** Bungee labels, generous horizontal padding, and at least 52px base height. Drop in is larger on desktop and adapts in compact layouts. Primary orange and muted secondary surfaces turn yellow on hover; press moves buttons downward.
+- **Ride and difficulty selectors:** solid segmented choices with `aria-pressed` selection. Rides pair an icon and name; location labels hide at compact widths. Selected paper surfaces make the current choice obvious, and changing a ride updates the scene immediately.
+- **HUD and countdown:** an ink scoreboard groups score, coins, and speed; a thin orange progress bar and separate pause button preserve the view. Large yellow countdown numbers share the title's offset shadow.
+- **Pause and results:** a warm-paper dialog with ink text, compact statistic blocks, and stacked actions that become a row in short landscape. Replay remains the primary action.
+- **Focus and motion:** controls use an orange 3px focus outline with 4px offset. Reduced motion shortens CSS transitions and suppresses camera roll and spray; gameplay continues to move.
 
 ## Do's and Don'ts
 
-### Do:
-
-- **Do** make the player, terrain slope, upcoming path, and nearest hazards understandable in one glance.
-- **Do** give every level a dedicated world builder, topology, landmark composition, material family, and hero motion profile.
-- **Do** use authored GLB assets where silhouette and animation quality determine the emotional ceiling, especially characters and vehicles.
-- **Do** use procedural geometry where it must follow the generated course: piste, roads, banks, river corridor, wave face, scatter zones, and ramps.
-- **Do** let speed, steering, contact, jumping, landing, camera, particles, and sound reinforce the same motion event.
-- **Do** preserve accessible DOM semantics, focus, touch size, contrast, reduced motion, and an unlosable Easy mode.
-
-### Don't:
-
-- **Don't** treat real-time 3D as a technical checkbox while retaining flat course composition, placeholder primitives, or screen-space effects.
-- **Don't** create seven palette swaps of one terrain mesh or hide shared topology behind landmarks.
-- **Don't** make the camera so close, low, shaky, or wide-angle that young players cannot read hazards.
-- **Don't** use generic neon glass, scanlines, sci-fi chrome, or dark translucent dashboards as the product identity.
-- **Don't** spend mobile budget on invisible detail, giant shadow maps, many dynamic lights, uncontrolled transparency, or heavyweight post-processing.
-- **Don't** allow adaptive quality to change simulation timing, obstacle density, course fairness, or essential UI information.
+- **Do** preserve the visible course corridor, recognizable rider silhouettes, and clear gaps between hazards.
+- **Do** keep visible obstacle widths aligned with collision widths and water boundaries continuous.
+- **Do** keep UI text crisp while the world remains deliberately low-resolution.
+- **Do** preserve keyboard controls, readable touch hints, and the simple unlosable Easy path.
+- **Don't** restore the superseded diorama direction or add glossy realism, glass panels, or ornamental HUD clutter.
+- **Don't** document downloaded models, adaptive quality, lazy loading, or physical-device frame rates as implemented features. The current renderer uses source-authored meshes and a fixed rendering budget.

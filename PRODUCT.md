@@ -30,9 +30,9 @@ Players use keyboard or touch in a full-viewport browser experience. The home sc
 - Easy mode is genuinely unlosable: no lives, no required jump input, soft course boundaries, and steering assistance.
 - Deterministic course generation must preserve clear obstacle gaps, protected ramp landing zones, reproducible seeds, and fair start/end sections.
 - Ramps, airborne obstacle clears, coins, combos, scores, lives, and run statistics remain part of the game.
-- The primary gameplay renderer is immersive real-time Three.js/WebGL with geometry, perspective cameras, lighting, shadows, fog, world-space effects, and optimized authored assets.
-- The DOM remains responsible for accessible menus, HUD, pause, loading, settings, and results.
-- Mobile frame pacing, adaptive graphics quality, lazy environment loading, bounded asset size, and explicit GPU-resource cleanup are release requirements.
+- The gameplay presentation is a PS1-inspired Three.js/WebGL 2 chase view: low-poly geometry, vertex colors, depth fog, subtle color dithering, and a capped low-resolution framebuffer. The original deterministic simulation remains authoritative.
+- The DOM remains responsible for accessible menus, HUD, pause, sound controls, graphics recovery messages, and results.
+- Phone performance uses a fixed resolution and geometry budget, instanced props, shared materials, and explicit GPU-resource cleanup. There are no model or texture downloads.
 - A general-purpose rigid-body physics engine is not required initially; tuned deterministic arcade simulation remains authoritative.
 - All seven sports are committed scope for this rebuild.
 
@@ -41,15 +41,15 @@ Players use keyboard or touch in a full-viewport browser experience. The home sc
 - Product name: It's Going Down.
 - Voice: direct, playful, energetic, and easy for children to understand.
 - The experience must remain chunky, inviting, readable, and child-friendly rather than realistic, aggressive, or simulation-heavy.
-- `docs/reference/ui-design-target.jpg` is a binding quality and style reference for immersive scale, groomed snow, volumetric scenery, atmospheric mountains, readable character silhouette, and surface spray. It is not a requirement to copy the exact composition.
+- The September 2026 user request replaces the prior diorama direction with a PlayStation-one-inspired browser game. Bold arcade lettering, chunky readable riders, simple controls, and immediate fun define the new direction. The older reference image is historical, not binding.
 
 ## Evidence on Hand
 
 - Existing product behavior and wording: `README.md`.
 - Existing deterministic gameplay, levels, input, audio, persistence, and UI: `src/`.
-- Binding visual reference: `docs/reference/ui-design-target.jpg`.
+- Historical visual reference: `docs/reference/ui-design-target.jpg` (superseded).
 - Historical Canvas visual-overhaul brief: `plans/prd.json`; it is superseded as the implementation architecture and must not be treated as the active plan.
-- No licensed production 3D asset library is currently present. New authored, generated, or sourced assets must record provenance and usage rights.
+- All 3D meshes are authored in source. Bungee is self-hosted under its bundled SIL Open Font License in `public/fonts/`.
 
 ## Product Principles
 

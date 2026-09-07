@@ -18,10 +18,14 @@
     "prepare": "node scripts/install-hooks.mjs"
   },
   "devDependencies": {
+    "@types/three": "^0.185.4",
     "oxlint": "^1.79.0",
     "prettier": "^3.6.2",
     "typescript": "^5.6.3",
     "vite": "^5.4.10",
     "vitest": "^3.2.7"
+  },
+  "dependencies": {
+    "three": "^0.185.1"
   }
 }

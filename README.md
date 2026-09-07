@@ -102,14 +102,21 @@ netlify deploy --build --prod   # production
 
 ## How it's built
 
-No framework, no runtime dependencies, no image or audio assets. The production
-bundle is about **18 KB gzipped** and loads instantly.
+The game uses TypeScript, Vite, and Three.js. It keeps the deterministic arcade
+simulation and adds a deliberately low-resolution, PS1-inspired 3D presentation.
+The production JavaScript is approximately **155 KB gzipped**, plus the self-hosted
+Bungee font (SIL Open Font License included). There are no model, texture, or audio downloads.
 
-- **Rendering** — Canvas 2D in the classic pseudo-3D segment-projection style
-  (the technique behind arcade racers of the 80s). The track is a ribbon of
-  projected quads drawn near-to-far with a running depth clip, so hills occlude
-  correctly. Everything is flat fills and gradients, which stays pin-sharp at any
-  device pixel ratio and costs very little on phone GPUs.
+- **Rendering** — low-poly vertex-painted meshes, a perspective chase camera,
+  depth fog, and color dithering. The framebuffer fits inside 720 × 480 pixels
+  regardless of device pixel density; the menus and HUD stay sharp. Repeated
+  props use instancing, and only the visible course is rebuilt. WebGL 2 is required.
+- **Worlds** — snow-capped peaks and chalets, a sunset city and suspension bridge,
+  coastal buildings and palms, racing grandstands, a jungle river, a raised wave
+  face, and a desert rally course. Each sport has an authored rider or vehicle.
+- **Recovery** — graphics-context loss pauses an active run and displays a notice.
+  Once graphics reconnect, resume from the pause menu. Unsupported browsers show
+  a startup message rather than a blank game.
 - **Audio** — synthesized live with WebAudio. Music, wind, and every sound
   effect are generated from oscillators and filtered noise, so there is nothing
   to download. The audio context is created on first tap, as mobile requires.
@@ -125,7 +132,8 @@ bundle is about **18 KB gzipped** and loads instantly.
 ```
 src/
   core/      math, input (keyboard + touch), WebAudio
-  game/      level definitions, track generation, physics, renderer
+  game/      level definitions, track generation, physics, WebGL renderer
+  rendering/ authored low-poly meshes and course coordinates
   ui/        menu, HUD, modals, design-system CSS
   main.ts    app shell and game loop
 ```

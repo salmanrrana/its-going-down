@@ -61,6 +61,7 @@ class App {
 
     this.canvas = document.createElement('canvas')
     this.canvas.id = 'game-canvas'
+    this.canvas.dataset.mode = 'menu'
     root.appendChild(this.canvas)
     this.renderer = new Renderer(this.canvas)
 
@@ -76,7 +77,9 @@ class App {
         <span>Hold right</span><span class="touch-hints__arrow">›</span>
       </div>
     `
-    this.touchJumpHint = this.touchHints.querySelector('[data-role="touch-jump"]') as HTMLElement
+    this.touchJumpHint = this.touchHints.querySelector(
+      '[data-role="touch-jump"]',
+    ) as HTMLElement
     root.appendChild(this.touchHints)
 
     this.hud = new Hud(() => this.pause())
@@ -117,6 +120,7 @@ class App {
     this.input.attach(this.canvas)
     window.addEventListener('keydown', this.onGlobalKey)
     window.addEventListener('resize', this.onResize)
+    window.addEventListener('game-graphics-lost', this.onGraphicsLost)
     window.addEventListener('orientationchange', this.onResize)
     document.addEventListener('visibilitychange', this.onVisibility)
 
@@ -144,6 +148,11 @@ class App {
   private onResize = (): void => {
     this.renderer.resize()
     this.input.resize(window.innerWidth, window.innerHeight)
+    this.refreshMenu()
+  }
+
+  private onGraphicsLost = (): void => {
+    this.pause()
   }
 
   private onVisibility = (): void => {
@@ -166,7 +175,13 @@ class App {
   }
 
   private refreshMenu(): void {
-    this.menu.update(this.level, this.difficulty, this.progress, this.input.touchSeen)
+    this.menu.update(
+      this.level,
+      this.difficulty,
+      this.progress,
+      this.input.touchSeen ||
+        window.matchMedia('(pointer: coarse), (max-width: 700px)').matches,
+    )
   }
 
   private startRun(): void {
@@ -183,6 +198,7 @@ class App {
     this.game = new Game(level, difficulty, seed)
 
     this.state = 'playing'
+    this.canvas.dataset.mode = 'playing'
     this.tickInput.clear()
     this.input.clear()
     this.menu.root.hidden = true
@@ -203,7 +219,8 @@ class App {
       !this.game ||
       this.state !== 'playing' ||
       this.modalOpen ||
-      (this.game.currentPhase !== 'running' && this.game.currentPhase !== 'countdown')
+      (this.game.currentPhase !== 'running' &&
+        this.game.currentPhase !== 'countdown')
     ) {
       return
     }
@@ -212,7 +229,7 @@ class App {
     this.input.clear()
     this.resetTiming()
     const level = getLevel(this.level)
-    this.modal.showPause(level.name, `${level.flag} ${level.location}`)
+    this.modal.showPause(level.name, level.location)
   }
 
   private resume(): void {
@@ -278,6 +295,7 @@ class App {
 
   private toMenu(): void {
     this.state = 'menu'
+    this.canvas.dataset.mode = 'menu'
     this.game = null
     this.tickInput.clear()
     this.input.clear()
@@ -311,7 +329,11 @@ class App {
       if (sampled.pause) {
         if (this.game.currentPhase === 'paused') this.resume()
         else if (!this.modalOpen) this.pause()
-        this.renderer.render(this.game.previousSnapshot, this.game.currentSnapshot, 1)
+        this.renderer.render(
+          this.game.previousSnapshot,
+          this.game.currentSnapshot,
+          1,
+        )
         return
       }
       this.renderGameFrame(elapsed, sampled.input)
@@ -334,7 +356,11 @@ class App {
       this.dispatchGameEvents(game.update(dt, this.tickInput.consume(dt)))
       this.renderer.update(dt)
     })
-    this.renderer.render(game.previousSnapshot, game.currentSnapshot, result.alpha)
+    this.renderer.render(
+      game.previousSnapshot,
+      game.currentSnapshot,
+      result.alpha,
+    )
   }
 
   private attract: Game | null = null
@@ -343,9 +369,14 @@ class App {
   private renderMenuBackdrop(elapsed: number): void {
     if (this.attractLevel !== this.level || !this.attract) {
       this.attractLevel = this.level
-      this.attract = new Game(getLevel(this.level), getDifficulty('easy'), 1337, {
-        attract: true,
-      })
+      this.attract = new Game(
+        getLevel(this.level),
+        getDifficulty('easy'),
+        1337,
+        {
+          attract: true,
+        },
+      )
       this.clock.reset()
     }
 
@@ -354,7 +385,11 @@ class App {
       this.dispatchGameEvents(attract.update(dt))
       this.renderer.update(dt)
     })
-    this.renderer.render(attract.previousSnapshot, attract.currentSnapshot, result.alpha)
+    this.renderer.render(
+      attract.previousSnapshot,
+      attract.currentSnapshot,
+      result.alpha,
+    )
   }
 
   destroy(): void {
@@ -362,6 +397,7 @@ class App {
     this.input.detach()
     window.removeEventListener('keydown', this.onGlobalKey)
     window.removeEventListener('resize', this.onResize)
+    window.removeEventListener('game-graphics-lost', this.onGraphicsLost)
     window.removeEventListener('orientationchange', this.onResize)
     document.removeEventListener('visibilitychange', this.onVisibility)
     this.renderer.dispose()
@@ -377,20 +413,25 @@ if (!root) throw new Error('Missing #app root element')
 try {
   new App(root)
 } catch (error) {
-  if (!(error instanceof RunFixtureError)) throw error
-
-  console.error('Invalid deterministic run fixture.', {
-    search: window.location.search,
+  const fixtureError = error instanceof RunFixtureError
+  console.error(
+    fixtureError
+      ? 'Invalid deterministic run fixture.'
+      : 'Game startup failed.',
     error,
-  })
+  )
   const screen = document.createElement('main')
   screen.className = 'screen screen--menu fixture-error'
   const title = document.createElement('h1')
   title.className = 'title'
-  title.textContent = 'Invalid run link'
+  title.textContent = fixtureError
+    ? 'Invalid run link'
+    : 'Couldn’t start the game'
   const detail = document.createElement('p')
   detail.className = 'subtitle'
-  detail.textContent = `${error.message} Fix the URL and reload.`
+  detail.textContent = fixtureError
+    ? `${error.message} Fix the URL and reload.`
+    : 'Try reloading, or open this game in a browser with WebGL 2 graphics enabled.'
   screen.append(title, detail)
   root.replaceChildren(screen)
 }

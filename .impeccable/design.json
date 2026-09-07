@@ -1,0 +1,92 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-07T00:24:52.663804+00:00",
+  "title": "Design System: It's Going Down",
+  "extensions": {
+    "shadows": [
+      {
+        "name": "display-outline",
+        "value": "3px 4px 0 var(--ink)",
+        "purpose": "Offset text shadow on title and countdown."
+      }
+    ],
+    "motion": [
+      {
+        "name": "control-transition",
+        "value": "140ms ease-out",
+        "purpose": "Button and ride hover feedback; reduced-motion CSS shortens transitions."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "compact-desktop",
+        "value": "701px\u20131100px"
+      },
+      {
+        "name": "phone-portrait",
+        "value": "max-width: 700px and orientation: portrait"
+      },
+      {
+        "name": "short-landscape",
+        "value": "max-height: 580px and orientation: landscape"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary action",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Drop in, resume, and replay.",
+      "html": "<button class=\"ds-button ds-primary\">Drop in \u2198</button>",
+      "css": ".ds-button{display:inline-flex;align-items:center;justify-content:center;min-height:52px;padding:12px 20px;border:0;border-radius:4px;font-family:Bungee,sans-serif;font-size:1rem;cursor:pointer;transition:transform 140ms ease-out,background 140ms ease-out}.ds-button:focus-visible{outline:3px solid var(--orange,#ff6446);outline-offset:4px}.ds-button:active{transform:translateY(2px)}.ds-primary{background:var(--orange,#ff6446);color:#1d2335}.ds-primary:hover{background:var(--yellow,#ffdc75);transform:translateY(-2px)}"
+    },
+    {
+      "name": "Secondary action",
+      "kind": "button",
+      "description": "Change ride and supporting dialog actions.",
+      "html": "<button class=\"ds-button ds-secondary\">Change ride</button>",
+      "css": ".ds-button{display:inline-flex;align-items:center;justify-content:center;min-height:52px;padding:12px 20px;border:0;border-radius:4px;font-family:Bungee,sans-serif;font-size:1rem;cursor:pointer;transition:transform 140ms ease-out,background 140ms ease-out}.ds-button:focus-visible{outline:3px solid var(--orange,#ff6446);outline-offset:4px}.ds-button:active{transform:translateY(2px)}.ds-secondary{background:#dddccf;color:var(--ink,#20283f)}.ds-secondary:hover{background:var(--yellow,#ffdc75)}"
+    },
+    {
+      "name": "Difficulty choice",
+      "kind": "button",
+      "description": "Pressed state reverses ink and paper.",
+      "html": "<button class=\"ds-difficulty\" aria-pressed=\"true\">Easy</button>",
+      "css": ".ds-difficulty{min-height:44px;padding:8px 10px;border:0;border-radius:3px;background:var(--ink,#20283f);color:var(--paper,#fff2d6);font:900 16px \"Trebuchet MS\",sans-serif;cursor:pointer}.ds-difficulty:hover{background:#3d4b66}.ds-difficulty[aria-pressed=\"true\"]{background:var(--paper,#fff2d6);color:var(--ink,#20283f)}.ds-difficulty:focus-visible{outline:3px solid var(--orange,#ff6446);outline-offset:4px}"
+    },
+    {
+      "name": "Ride choice",
+      "kind": "card",
+      "refersTo": "ride-selected",
+      "description": "Compact ride selector with inline icon and location.",
+      "html": "<button class=\"ds-ride\" aria-pressed=\"true\"><svg viewBox=\"0 0 24 24\" width=\"26\" height=\"26\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" aria-hidden=\"true\"><path d=\"M3 17h18M6 17l2-8h8l2 8M8 9V6h8v3M5 17v3M19 17v3M9 13h6\"/></svg><span><strong>Rally Car</strong><small>Atlas Mountains, Morocco</small></span></button>",
+      "css": ".ds-ride{display:flex;align-items:center;gap:8px;min-height:74px;padding:12px;border:0;border-radius:3px;background:var(--ink,#20283f);color:var(--paper,#fff2d6);text-align:left;font-family:\"Trebuchet MS\",sans-serif;cursor:pointer;transition:background 140ms ease-out,transform 140ms ease-out}.ds-ride strong{display:block;font-size:.8rem;font-weight:900}.ds-ride small{display:block;margin-top:5px;font-size:.64rem}.ds-ride:hover{background:#3d4b66;transform:translateY(-3px)}.ds-ride[aria-pressed=\"true\"]{background:var(--paper,#fff2d6);color:var(--ink,#20283f)}.ds-ride:focus-visible{outline:3px solid var(--orange,#ff6446);outline-offset:4px}"
+    },
+    {
+      "name": "Scoreboard",
+      "kind": "custom",
+      "description": "Crisp numbers over an opaque ink surface.",
+      "html": "<div class=\"ds-scoreboard\"><span class=\"ds-score-label\">Score</span><strong class=\"ds-score-value\">1,286</strong></div>",
+      "css": ".ds-scoreboard{display:inline-block;padding:12px 18px;border-radius:3px;background:var(--ink,#20283f);color:var(--paper,#fff2d6);font-family:\"Trebuchet MS\",sans-serif;font-variant-numeric:tabular-nums}.ds-score-label{display:block;font-size:.6rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em}.ds-score-value{display:block;margin-top:3px;font-family:Bungee,sans-serif;font-size:1.5rem;font-weight:400;line-height:1.1}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Arcade Game Sleeve",
+    "overview": "A playful PS1-inspired downhill world pairs faceted scenery and chunky riders with loud, crisp lettering. The world is pixelated; menus and HUD remain full-resolution DOM elements.",
+    "keyCharacteristics": [
+      "Source-authored low-poly meshes and instanced props",
+      "Long depth fog and capped framebuffer",
+      "Bold arcade lettering and flat rectangular controls"
+    ],
+    "dos": [
+      "Do preserve readable course gaps and rider silhouettes.",
+      "Do keep visible hazard widths aligned with collision widths.",
+      "Do keep menus and HUD crisp."
+    ],
+    "donts": [
+      "Do not restore the superseded diorama direction.",
+      "Do not add ornamental HUD clutter."
+    ]
+  }
+}
