@@ -19,7 +19,9 @@ describe('3D course alignment', () => {
     const points: CoursePoint[] = []
     const index = 120
     sampleCourse(track, index * SEGMENT_LENGTH, points)
-    expect(points[20]).toMatchObject({ x: 0, y: 0, index })
+    expect(points[20].x).toBeCloseTo(0)
+    expect(points[20].y).toBeCloseTo(0)
+    expect(points[20].index).toBe(index)
     expect(points[20].z).toBeCloseTo(0)
     sampleCourse(track, (index - 1) * SEGMENT_LENGTH, points)
     expect(points[21].index).toBe(index)
@@ -42,6 +44,24 @@ describe('3D course alignment', () => {
       )
     }
     expect(points[0]).toBe(first)
+  })
+  it('interpolates the current curve across the player position', () => {
+    const curvedTrack = generateTrack(LEVELS[0], getDifficulty('easy'), 1337)
+    curvedTrack.segments[120].curve = 10
+    curvedTrack.segments[121].curve = 20
+    curvedTrack.segments[122].curve = 0
+    const points: CoursePoint[] = []
+
+    sampleCourse(curvedTrack, 120 * SEGMENT_LENGTH, points)
+
+    expect(points[20].x).toBeCloseTo(0)
+    expect(points[21].x).toBeCloseTo(10 * WORLD_SCALE)
+    expect(points[22].x).toBeCloseTo(40 * WORLD_SCALE)
+
+    sampleCourse(curvedTrack, 120.5 * SEGMENT_LENGTH, points)
+
+    expect(points[20].x).toBeCloseTo(-5 * WORLD_SCALE)
+    expect(points[21].x).toBeCloseTo(5 * WORLD_SCALE)
   })
 })
 

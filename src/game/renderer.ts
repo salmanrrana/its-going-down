@@ -264,12 +264,18 @@ export class Renderer implements GameView {
         const right = CROSS_SECTION[col + 1]
         const lane = left >= -1 && right <= 1
         const edge = !lane && left >= -1.07 && right <= 1.07
-        const tint = lane
-          ? level.palette.laneA
-          : edge
-            ? level.palette.rumbleA
-            : level.palette.groundA
         const band = Math.floor(a.index / 3) % 2
+        const tint = lane
+          ? band === 0
+            ? level.palette.laneA
+            : level.palette.laneB
+          : edge
+            ? band === 0
+              ? level.palette.rumbleA
+              : level.palette.rumbleB
+            : band === 0
+              ? level.palette.groundA
+              : level.palette.groundB
         this.color.set(tint)
         const noise = Math.sin(a.index * 0.67 + col * 2.4) * 0.016
         this.color.multiplyScalar(
@@ -396,6 +402,7 @@ export class Renderer implements GameView {
           this.placeShadow(x, p.y + bank, p.z, prop.scale * 2, prop.scale * 1.2)
       }
       for (const prop of seg.obstacles) {
+        if (prop.spent) continue
         this.place(prop.kind, p.x + prop.x * WORLD_SCALE, p.y, p.z, prop.scale)
         if (p.z > -70)
           this.placeShadow(p.x + prop.x * WORLD_SCALE, p.y, p.z, 2.1, 1.4)

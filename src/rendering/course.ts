@@ -24,23 +24,23 @@ export function sampleCourse(
   const current = track.segments[base]
   const next = track.segments[Math.min(base + 1, track.segments.length - 1)]
   const ground = lerp(current.y, next.y, fraction)
-  let x = 0
-  let dx = -current.curve * fraction
+  let x = -current.curve * fraction
+  let dx = current.curve
   for (let i = -20; i <= VISIBLE_SEGMENTS; i++) {
     const index = Math.max(0, Math.min(base + i, track.segments.length - 1))
     const segment = track.segments[index]
     // Extend the course past either endpoint for the chase camera and finish.
     const z = (base + i) * SEGMENT_LENGTH
-    if (i > 0) {
-      x += dx
-      dx += segment.curve
-    }
     const point = points[i + 20] ?? { x: 0, y: 0, z: 0, index: 0 }
     point.x = x * WORLD_SCALE
     point.y = (segment.y - ground) * WORLD_SCALE
     point.z = -(z - position) * WORLD_SCALE
     point.index = index
     points[i + 20] = point
+    if (i >= 0) {
+      if (i > 0) dx += segment.curve
+      x += dx
+    }
   }
   return ground
 }
